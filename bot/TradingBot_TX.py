@@ -17,10 +17,11 @@
 上github與別人交流
 
 [未完工]
+停損:半價
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
 在call-back函數之外再建立執行緒來計算
-停損:半價
 觸價突破單
+多週期策略：三重濾網
 加碼
 選擇權的訊號:同時要求許多連線，多週期
 tradingview來啟動 to IB&SinoPac API.
@@ -200,10 +201,11 @@ def selectOption():
         sym=tx+str(year)+str(month).zfill(2)+strikePrice    # 算出當前日期適合的合約symbol
 
         try:
-            contract = api.Contracts.Options[tx][sym]  # 取得合約
+            # contract = api.Contracts.Options[tx][sym]  # 取得合約
+            contract=symbol2Contract(sym)
             snapshots = api.snapshots([contract])  # 取得合約的snapshots
             price = int(snapshots[0].close)  # 取得合約的價格
-            print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym, price)
+            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym, price)
             if price <= nDollar:  # 取得nDollar元以下最接近nDollar元的合約
                 return contract
             tmpContract = contract
@@ -247,8 +249,7 @@ st = Strategies(StrategyType)   # 策略函式
 rm = RiskManage(StrategyType, 2)    # 風控函式
 
 now = datetime.now().strftime('%H:%M')
-offMarket = (now > '05:00' and now < '08:45') or (
-    now > '13:45' and now < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
+offMarket = (now >='05:00' and now < '08:45') or (now >= '13:45' and now < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
 print(datetime.fromtimestamp(int(datetime.now().timestamp())),
       'Shioaji API start!', 'Market Closed' if offMarket else 'Market Opened')
 placedOrder = 0  # 一開始下單次數為零
@@ -321,8 +322,8 @@ def q(topic, quote):
     # Timestamp在5或5的倍數時以及收盤時進行一次tick重組分K
     if ts.minute/period == ts.minute//period and NextMinute != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
         NextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
-        print(datetime.fromtimestamp(int(datetime.now().timestamp())),
-              'Market Closed.' if offMarket else 'Market Opened:'+ts.strftime('%F %H:%M'))
+        # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
+        #       'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+ts.strftime('%F %H:%M'))
         resampleBar(period, data1)  # 重組K線
 
         # 進場訊號
@@ -439,6 +440,7 @@ def resampleBar(period, data1):
         str(period)+'min', closed='left', label='left').agg(resDict)  # tick重組分K
     del data1[0:len(data1)-1]  # 只保留最新的一筆tick，減少記憶體佔用
     df_res.drop(df_res.index[-1], axis=0, inplace=True)  # 去掉最新的一筆分K，減少記憶體佔用
+    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+df_res.index[-1].strftime('%F %H:%M'))
     df_res.reset_index(inplace=True)
     df_res.dropna(axis=0, how='any', inplace=True)  # 去掉空行
     if len(df_res.ts) != 0: #當有新的重組K線時
@@ -495,6 +497,10 @@ def placeOrder(contract_txo, order):
 
     return
 
+def symbol2Contract(symbol):
+    contract = api.Contracts.Options[symbol[:3]][symbol]
+    return contract
+
 # 將交易紀錄寫入csv(未完工)
 def toCSV(tradeRecord):
     a=[]
@@ -502,8 +508,8 @@ def toCSV(tradeRecord):
         a.append(tradeRecord[i])
     df_tradeRecord=pd.DataFrame(a)
     if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
-        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',sep=',',index=True,header=True)
-    elif df_tradeRecord.iloc[-1,3]==0: 
+        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',sep=',',mode='w',index=True,header=True)
+    elif df_tradeRecord.iloc[-1,4]==0: 
         with open('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',"r") as fin:
              with open('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',"w") as fout:
                 writer=csv.writer(fout)
