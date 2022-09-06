@@ -6,7 +6,7 @@
 市場收盤時要收K線
 修正指標慢了一根K線
 獨立使用_RSI策略集
-自動選擇周選合約，用TX[tx]的方式，把所有snapshot讀入，只留10-20之間，然後排序取最小的。8/31 W6? 9W1
+自動選擇周選合約，用TX[tx]的方式，把所有snapshot讀入，只留一定價格以下的，然後排序取最小的。8/31 W6? 9W1
 先訂閱ticks在讀入kbar，然後kbar完成後再接上去
 休市期間不要重組K線
 訂單訊息檔readOrder
@@ -319,7 +319,7 @@ def q(topic, quote):
     # df1.index = df1.ts
     # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=0)
     
-    # Timestamp在5或5的倍數時以及收盤時進行一次tick重組分K
+    # Timestamp在period或period的倍數時以及收盤時進行一次tick重組分K
     if ts.minute/period == ts.minute//period and NextMinute != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
         NextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
