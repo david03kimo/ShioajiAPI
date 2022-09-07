@@ -18,6 +18,7 @@
 上github與別人交流
 
 [未完工]
+處理OrderState
 Live從API回報了解庫存
 未成交單子處理
 停損:半價
