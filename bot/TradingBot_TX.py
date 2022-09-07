@@ -21,9 +21,9 @@
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
 在call-back函數之外再建立執行緒來計算
 觸價突破單
-多週期策略：三重濾網
+
 加碼
-選擇權的訊號:同時要求許多連線，多週期
+選擇權的訊號:同時要求許多連線，多週期：三重濾網
 tradingview來啟動 to IB&SinoPac API.
 周選合約裡面找划算的
 交易股票期貨
@@ -148,6 +148,7 @@ def selectOption():
     '''
     需要把所有大盤上下10檔都snapshop出報價來選擇一定價格以下的合約
     '''
+    global orderPrice
     
     # 計算今年每個月的結算日
     year = datetime.now().year
@@ -188,7 +189,7 @@ def selectOption():
     #計算履約價與合約價
     contract_twi = api.Contracts.Indexs["001"]  # 大盤
     snapshots_twi = api.snapshots([contract_twi])  # 取得大盤指數作為選取選擇權合約起點
-    for count in range(1, 21):
+    for count in range(1, 41):
         # 依照大盤轉換每50點間隔的履約價
         if direction.upper() == 'BUY':
             strikePrice = str(
@@ -199,14 +200,15 @@ def selectOption():
         
         tx = 'TX'+str(weeks) if weeks != 3 else 'TXO'  # 算出TX?
         sym=tx+str(year)+str(month).zfill(2)+strikePrice    # 算出當前日期適合的合約symbol
+        print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym)
 
         try:
             # contract = api.Contracts.Options[tx][sym]  # 取得合約
             contract=symbol2Contract(sym)
             snapshots = api.snapshots([contract])  # 取得合約的snapshots
-            price = int(snapshots[0].close)  # 取得合約的價格
+            orderPrice = int(snapshots[0].close)  # 取得合約的價格
             # print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym, price)
-            if price <= nDollar:  # 取得nDollar元以下最接近nDollar元的合約
+            if orderPrice <= nDollar:  # 取得nDollar元以下最接近nDollar元的合約
                 return contract
             tmpContract = contract
         except:
@@ -455,16 +457,18 @@ def resampleBar(period, data1):
 def selectOrder(action,quantity):
     global contract_txo
     global optionDict
+    global orderPrice
     
     order = api.Order(
         action=action.title(),
         #  price=0.3, #價格
-        price=0,  # 價格
+        # price=0,  # 價格
+        price=orderPrice,  # 價格
         quantity=quantity,  # 口數
-        #  price_type='LMT',
-        price_type='MKP',
-        #  order_type='ROD',
-        order_type='IOC',
+         price_type='LMT',
+        # price_type='MKP',
+         order_type='ROD',
+        # order_type='IOC',
         octype='Auto',  # 倉別，使用自動
         #  OptionRight='Call', #選擇權類型
         OptionRight=optionDict[str(contract_txo.option_right)],  # 選擇權類型
@@ -485,7 +489,7 @@ def placeOrder(contract_txo, order):
             # 顯示訊息
             print(datetime.fromtimestamp(int(datetime.now().timestamp())), accountType,'Account',  order.action.upper(),optionDict[str(contract_txo.option_right)],contract_txo.symbol,'@',str(closePrice))
             # 發送telegram
-            sendTelegram(accountType+' Account '+ order.action.upper()+optionDict[str(contract_txo.option_right)]+contract_txo.symbol+'@'+str(closePrice), token, chatid)
+            sendTelegram(accountType+' Account '+ order.action.upper()+' '+optionDict[str(contract_txo.option_right)]+' '+contract_txo.symbol+'@'+str(closePrice), token, chatid)
             placedOrder += 1
             api.list_trades()
             api.update_status(api.futopt_account)
