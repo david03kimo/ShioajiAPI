@@ -7,11 +7,11 @@
 運用telegram通知自己已下單訊息與目前設定
 修正指標慢了一根K線
 獨立使用_RSI策略集
-自動選擇周選合約，用TX[tx]的方式，把所有snapshot讀入，只留一定價格以下的，然後排序取最小的。8/31 W6? 9W1
+自動選擇周選合約，用TX[tx]的方式，把所有snapshot讀入，只留一定價格以下的，然後排序取最小的。8/31 W6? 9W1，修正錯誤
 先訂閱ticks在讀入kbar，然後kbar完成後再接上去
 休市期間不要重組K線
 訂單訊息檔readOrder
-周選下範圍市價單
+周選下範圍市價單與限價單
 函式化
 自動交易
 報表，使用trade dict:reference IB API new design
@@ -25,7 +25,6 @@ Live從API回報了解庫存
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
 在call-back函數之外再建立執行緒來計算
 觸價突破單
-
 加碼
 選擇權的訊號:同時要求許多連線，多週期：三重濾網
 tradingview來啟動 to IB&SinoPac API.
@@ -178,11 +177,11 @@ def selectOption():
             if sday+n*7>calendar.monthrange(year, month)[1] :   #以每月最後一日為限計算有幾個週三
                 pass  
             else:
-                settleDict[month][n+1]=dt.date(year,month,sday+n*7).strftime("%F")  # 紀錄每個月結算日
+                settleDict[month][n+1]=dt.date(year,month,sday+n*7,8,45,0).strftime("%F %H:%M:%S")  # 紀錄每個月結算日
                 
     for m in settleDict.keys():
         for w in settleDict[m].keys():
-            if settleDict[m][w]>now.strftime('%F'): #比對哪個週結算日超過目前日期，此為最近的週結算日
+            if settleDict[m][w]>datetime.now().strftime("%F %H:%M:%S"): #比對哪個週結算日超過目前日期，此為最近的週結算日
                 month=m
                 weeks=w
                 break   # 跳出所有迴圈
