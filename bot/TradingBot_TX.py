@@ -157,8 +157,6 @@ def selectOption():
     year = datetime.now().year
     month = datetime.now().month
     day = datetime.now().day
-    now=dt.date(year,month,day)
-    print(now)
     settleDict={}   # 紀錄今年所有月份的結算日
     sday=0  #本月第一個週三是幾日
     for month in range(1,13):
@@ -253,8 +251,8 @@ StrategyType = 'API'  # 告訴策略用API方式來處理訊號
 st = Strategies(StrategyType)   # 策略函式
 rm = RiskManage(StrategyType, 2)    # 風控函式
 
-now = datetime.now().strftime('%H:%M')
-offMarket = (now >='05:00' and now < '08:45') or (now >= '13:45' and now < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
+nowTime = datetime.now().strftime('%H:%M')
+offMarket = (nowTime >='05:00' and nowTime < '08:45') or (nowTime >= '13:45' and nowTime < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
 print(datetime.fromtimestamp(int(datetime.now().timestamp())),
       'Shioaji API start!', 'Market Closed' if offMarket else 'Market Opened')
 placedOrder = 0  # 一開始下單次數為零
@@ -516,12 +514,13 @@ def toCSV(tradeRecord):
     df_tradeRecord=pd.DataFrame(a)
     if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
         df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',sep=',',mode='w',index=True,header=True)
-    elif df_tradeRecord.iloc[-1,4]==0: 
+    elif df_tradeRecord.iloc[-1,5]==0: 
         with open('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',"r") as fin:
              with open('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',"w") as fout:
                 writer=csv.writer(fout)
                 for row in csv.reader(fin):
                     writer.writerow(row[:-1])
+                    #  and df_tradeRecord.[-1,1]==
         df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',sep=',', index=True,mode='a', header=False)
     else:
         df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',sep=',', index=True,mode='a', header=False)
