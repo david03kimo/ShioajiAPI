@@ -177,7 +177,7 @@ def selectOption():
             if sday+n*7>calendar.monthrange(year, month)[1] :   #以每月最後一日為限計算有幾個週三
                 pass  
             else:
-                settleDict[month][n+1]=dt.date(year,month,sday+n*7,8,45,0).strftime("%F %H:%M:%S")  # 紀錄每個月結算日
+                settleDict[month][n+1]=dt.datetime(year,month,sday+n*7,8,45,0).strftime("%F %H:%M:%S")  # 紀錄每個月結算日
                 
     for m in settleDict.keys():
         for w in settleDict[m].keys():
