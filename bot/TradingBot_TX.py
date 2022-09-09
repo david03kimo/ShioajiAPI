@@ -59,8 +59,8 @@ PI = str(config.get('Login', 'PersonalId'))
 PWD = str(config.get('Login', 'PassWord'))
 CAPath = str(config.get('Login', 'CAPath'))
 CAPWD = str(config.get('Login', 'CAPassWord'))
-period = int(config.get('Trade', 'period'))
-nDollar = int(config.get('Trade', 'nDollar'))
+period = int(config.get('Trade', 'period')) # 讀入交易設定：K線週期
+nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
 
 # 登入帳號
 api.login(
@@ -89,6 +89,7 @@ def readOrder():
     global accountType
     global qty
     global orderCount
+    # 讀入訂單設定檔
     df_order = pd.read_csv(
         '/Users/apple/Documents/code/PythonX86/Output/order.csv',index_col=False)
     df_order = df_order.values.tolist()
@@ -109,7 +110,7 @@ def readOrder():
 
     return
 
-# 發送訊息到Telegram
+# 發送訊息到Telegram函式
 def sendTelegram(text, token, chatid):
     text='SinaPac: '+text
     params = {'chat_id': chatid, 'text': text, 'parse_mode': 'HTML'}
