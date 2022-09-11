@@ -16,13 +16,13 @@
 自動交易
 報表，使用trade dict:reference IB API new design
 上github與別人交流
+交易紀錄存在CSV可以延續不因程式中斷而重新計算
 
 [未完工]
 處理OrderState
 Live從API回報了解庫存
 未成交單子處理
 停損:半價
-交易紀錄存在CSV可以延續不因程式中斷而重新計算
 在call-back函數之外再建立執行緒來計算
 觸價突破單
 加碼
@@ -510,10 +510,17 @@ def symbol2Contract(symbol):
 # 將交易紀錄寫入csv
 def toCSV(tradeRecord,openTrade):
     df_tradeRecord=pd.DataFrame.from_dict(tradeRecord,orient='index')
-    df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index=1)
+    if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
+        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',mode='w',index=1)
+    else:
+        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',mode='a',index=1)
+        
     df_openTrade=pd.DataFrame(openTrade)
-    df_openTrade.to_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
-
+    if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv'):
+        df_openTrade.to_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',mode='w',index=0)
+    else:
+        df_openTrade.to_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',mode='a',index=0)
+        
     return
 
 # 保持程式開啟
