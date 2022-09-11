@@ -188,6 +188,7 @@ def selectOption():
             continue
         break
     
+    
     #計算履約價與合約價
     contract_twi = api.Contracts.Indexs["001"]  # 大盤
     snapshots_twi = api.snapshots([contract_twi])  # 取得大盤指數作為選取選擇權合約起點
@@ -221,30 +222,17 @@ def selectOption():
 
     return contract
 
-# 尚未完成
-# def fromCSV(tradeRecord,openTrade):
-#     if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
-#         pass
-#     else: 
-        
-#         a=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv')
-#         # print(a.iloc[-1,1])
-        
-#         # input('xxx')
-#         tradeRecord[a.iloc[-1,1]]=a
-#         # openTrade.append[a.iloc[-1,1]]
-#         openTrade.append(list(tradeRecord.keys())[-1])
-#         # print(tradeRecord)
-#         # print(openTrade)
-#         # c=input('xxxxx')
-
-        
-#         with open('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',"r") as fin:
-#              with open('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',"w") as fout:
-#                 writer=csv.writer(fout)
-#                 for row in csv.reader(fin):
-#                     writer.writerow(row[:-1])
-#     return
+# 從CSV讀入交易紀錄
+def fromCSV():
+    df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
+    dict_tradeRecord={}
+    for index in df_tradeRecord.index:
+        dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
+    df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
+    list_openTrade=df_openTrade.loc[0].to_list()
+    print(dict_tradeRecord,list_openTrade)
+   
+    return dict_tradeRecord,list_openTrade
 
 # 基本設定
 # 呼叫策略函式
@@ -252,8 +240,8 @@ StrategyType = 'API'  # 告訴策略用API方式來處理訊號
 st = Strategies(StrategyType)   # 策略函式
 rm = RiskManage(StrategyType, 2)    # 風控函式
 
-nowTime = datetime.now().strftime('%H:%M')
-offMarket = (nowTime >='05:00' and nowTime < '08:45') or (nowTime >= '13:45' and nowTime < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
+nowTime = datetime.now().strftime('%H:%M:%S')
+offMarket = (nowTime >='05:00:00' and nowTime < '08:45:00') or (nowTime >= '13:45:00' and nowTime < '15:00:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
 print(datetime.fromtimestamp(int(datetime.now().timestamp())),
       'Shioaji API start!', 'Market Closed' if offMarket else 'Market Opened')
 placedOrder = 0  # 一開始下單次數為零
@@ -347,7 +335,7 @@ def q(topic, quote):
                     placeOrder(contract_txo, order) #下單
                     # 紀錄模擬交易紀錄
                     tradeRecord[ts.strftime('%F %H:%M')]={'Symbol':contract_txo.symbol,
-                                                         'DateTime':ts.strftime('%F %H:%M'),
+                                                         'DateTime':ts.strftime('%F %H:%M:%S'),
                                                          'Entry Price':closePrice,
                                                          'Exit Price':0.,
                                                          'Quantity':qty,
@@ -360,7 +348,7 @@ def q(topic, quote):
                     # 紀錄未平倉紀錄
                     openTrade.append(list(tradeRecord.keys())[-1])
                     # 寫入csv
-                    toCSV(tradeRecord)
+                    toCSV(tradeRecord,openTrade)
                 elif len(openTrade)!=0:     #如果未平倉不為零，留作未來加碼用
                     pass
             
@@ -388,7 +376,7 @@ def q(topic, quote):
                     order = selectOrder('BUY',qty)
                     placeOrder(contract_txo, order)
                     tradeRecord[ts.strftime('%F %H:%M')]={'Symbol':contract_txo.symbol,
-                                                         'DateTime':ts.strftime('%F %H:%M'),
+                                                         'DateTime':ts.strftime('%F %H:%M:%S'),
                                                          'Entry Price':closePrice,
                                                          'Exit Price':0.,
                                                          'Quantity':qty,
@@ -507,24 +495,12 @@ def symbol2Contract(symbol):
     contract = api.Contracts.Options[symbol[:3]][symbol]
     return contract
 
-# 將交易紀錄寫入csv(未完工)
-def toCSV(tradeRecord):
-    a=[]
-    for i in tradeRecord.keys():
-        a.append(tradeRecord[i])
-    df_tradeRecord=pd.DataFrame(a)
-    if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
-        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',sep=',',mode='w',index=True,header=True)
-    elif df_tradeRecord.iloc[-1,5]==0: 
-        with open('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',"r") as fin:
-             with open('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',"w") as fout:
-                writer=csv.writer(fout)
-                for row in csv.reader(fin):
-                    writer.writerow(row[:-1])
-                    #  and df_tradeRecord.[-1,1]==
-        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',sep=',', index=True,mode='a', header=False)
-    else:
-        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',sep=',', index=True,mode='a', header=False)
+# 將交易紀錄寫入csv
+def toCSV(tradeRecord,openTrade):
+    df_tradeRecord=pd.DataFrame.from_dict(tradeRecord,orient='index')
+    df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index=1)
+    df_openTrade=pd.DataFrame(openTrade)
+    df_openTrade.to_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
 
     return
 
