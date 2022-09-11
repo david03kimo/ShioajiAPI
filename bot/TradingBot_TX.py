@@ -224,16 +224,26 @@ def selectOption():
 
 # 從CSV讀入交易紀錄
 def fromCSV():
-    df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
     dict_tradeRecord={}
-    for index in df_tradeRecord.index:
-        dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
-    df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
-    list_openTrade=df_openTrade.loc[0].to_list()
-    print(dict_tradeRecord,list_openTrade)
-   
-    return dict_tradeRecord,list_openTrade
-
+    list_openTrade=[]
+    
+    if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
+        return {},[]
+    elif not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv'):
+        df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
+        for index in df_tradeRecord.index:
+            dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
+        return dict_tradeRecord,[]
+    else:
+        df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
+        for index in df_tradeRecord.index:
+            dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
+        df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv')
+        # df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
+        list_openTrade=df_openTrade.loc[0].to_list()
+        print(dict_tradeRecord,list_openTrade)
+        return dict_tradeRecord,list_openTrade
+        
 # 基本設定
 # 呼叫策略函式
 StrategyType = 'API'  # 告訴策略用API方式來處理訊號
