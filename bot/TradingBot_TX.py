@@ -336,7 +336,7 @@ def q(topic, quote):
                     order = selectOrder(signal,qty) #設定訂單
                     placeOrder(contract_txo, order) #下單
                     # 紀錄模擬交易紀錄
-                    tradeRecord[ts.strftime('%F %H:%M')]={'Symbol':contract_txo.symbol,
+                    tradeRecord[ts.strftime('%F %H:%M:%S')]={'Symbol':contract_txo.symbol,
                                                          'DateTime':ts.strftime('%F %H:%M:%S'),
                                                          'Entry Price':closePrice,
                                                          'Exit Price':0.,
@@ -377,7 +377,7 @@ def q(topic, quote):
                     closePrice = snapshots[0].close
                     order = selectOrder('BUY',qty)
                     placeOrder(contract_txo, order)
-                    tradeRecord[ts.strftime('%F %H:%M')]={'Symbol':contract_txo.symbol,
+                    tradeRecord[ts.strftime('%F %H:%M:%S')]={'Symbol':contract_txo.symbol,
                                                          'DateTime':ts.strftime('%F %H:%M:%S'),
                                                          'Entry Price':closePrice,
                                                          'Exit Price':0.,
