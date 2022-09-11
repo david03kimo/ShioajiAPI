@@ -258,6 +258,8 @@ openTrade=[]    #紀錄未平倉
 # fromCSV(tradeRecord,openTrade)
 # 合約設定
 contract_txf = selectFutures()  # 選定期指合約
+# 讀入過去交易紀錄
+tradeRecord,openTrade=fromCSV()
 
 # 歷史報價
 api.quote.subscribe(contract_txf)  # 訂閱即時ticks資料
