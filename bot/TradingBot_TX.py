@@ -231,20 +231,26 @@ def fromCSV():
     list_openTrade=[]
     
     if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
+        print({},[])
         return {},[]
-    elif not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv'):
+    elif os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv') and not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv'):
         df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
         for index in df_tradeRecord.index:
             dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
             # dict_tradeRecord.drop(index=dict_tradeRecord[dict_tradeRecord['Exit Price']==0].index,axis = 0,inplace = True)
+        print(dict_tradeRecord,[])
         return dict_tradeRecord,[]
-    else:
+    elif os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv') and os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv'):
         df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
         for index in df_tradeRecord.index:
             dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
             # dict_tradeRecord.drop(index=dict_tradeRecord[dict_tradeRecord['Exit Price']==0].index,axis = 0,inplace = True)
-        df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv')
-        # df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
+        try:
+            df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv')
+            # df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
+        except:
+            print(dict_tradeRecord,[])
+            return dict_tradeRecord,[]
         list_openTrade=df_openTrade.loc[0].to_list()
         print(dict_tradeRecord,list_openTrade)
         return dict_tradeRecord,list_openTrade
@@ -358,11 +364,17 @@ def q(topic, quote):
             
             
             # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute,ifActivateBot)
-            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute)
+            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute)
             sendTelegram('60min K:'+str(ts.hour), token, chatid)
             ifActivateBot=st._RSI(df_HTF)
-            print(df_LTF)
-            print(df_HTF)
+            # print(df_LTF)
+            # print(df_HTF)
+            if direction=='BUY' and ifActivateBot =='BUY':  #進場訊號
+                print('Buy bot',ifActivateBot)
+                sendTelegram('60min K:Buy bot', token, chatid)
+            elif direction=='SELL' and ifActivateBot =='SELL':  
+                print('Sell bot',ifActivateBot)
+                sendTelegram('60min K:Sell bot', token, chatid)
             
             
         #依照設定更改動作
