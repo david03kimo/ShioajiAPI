@@ -19,6 +19,8 @@
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
 
 [未完工]
+加上60分鐘線telegram提醒
+多週期：三重濾網
 處理OrderState
 Live從API回報了解庫存
 未成交單子處理
@@ -26,7 +28,7 @@ Live從API回報了解庫存
 在call-back函數之外再建立執行緒來計算
 觸價突破單
 加碼
-選擇權的訊號:同時要求許多連線，多週期：三重濾網
+選擇權的訊號:同時要求許多連線，
 tradingview來啟動 to IB&SinoPac API.
 周選合約裡面找划算的
 交易股票期貨
@@ -59,7 +61,8 @@ PI = str(config.get('Login', 'PersonalId'))
 PWD = str(config.get('Login', 'PassWord'))
 CAPath = str(config.get('Login', 'CAPath'))
 CAPWD = str(config.get('Login', 'CAPassWord'))
-period = int(config.get('Trade', 'period')) # 讀入交易設定：K線週期
+lowTimeFrame = int(config.get('Trade', 'lowTimeFrame')) # 讀入交易設定：K線週期
+highTimeFrame = int(config.get('Trade', 'highTimeFrame')) # 讀入交易設定：K線週期
 nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
 
 # 登入帳號
@@ -233,11 +236,13 @@ def fromCSV():
         df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
         for index in df_tradeRecord.index:
             dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
+            # dict_tradeRecord.drop(index=dict_tradeRecord[dict_tradeRecord['Exit Price']==0].index,axis = 0,inplace = True)
         return dict_tradeRecord,[]
     else:
         df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
         for index in df_tradeRecord.index:
             dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
+            # dict_tradeRecord.drop(index=dict_tradeRecord[dict_tradeRecord['Exit Price']==0].index,axis = 0,inplace = True)
         df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv')
         # df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
         list_openTrade=df_openTrade.loc[0].to_list()
@@ -250,8 +255,8 @@ StrategyType = 'API'  # 告訴策略用API方式來處理訊號
 st = Strategies(StrategyType)   # 策略函式
 rm = RiskManage(StrategyType, 2)    # 風控函式
 
-nowTime = datetime.now().strftime('%H:%M:%S')
-offMarket = (nowTime >='05:00:00' and nowTime < '08:45:00') or (nowTime >= '13:45:00' and nowTime < '15:00:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
+nowTime = datetime.now().strftime('%H:%M')
+offMarket = (nowTime >='05:00' and nowTime < '08:45') or (nowTime > '13:45' and nowTime < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
 print(datetime.fromtimestamp(int(datetime.now().timestamp())),
       'Shioaji API start!', 'Market Closed' if offMarket else 'Market Opened')
 placedOrder = 0  # 一開始下單次數為零
@@ -288,28 +293,36 @@ resDict = {
 
 # 從合約讀取選擇權形式字典
 optionDict = {'OptionRight.Call': 'Call', 'OptionRight.Put':'Put'}
-df = df0.resample(str(period)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成5分K
-NextMinute = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
-print(datetime.fromtimestamp(int(datetime.now().timestamp())),
-      'Market Closed.' if offMarket else 'Market Opened.K Bar label:'+str(NextMinute-NextMinute % period))  # 顯示分K的開始分鐘數
-df.reset_index(inplace=True)
-# df.to_csv('/Users/apple/Documents/code/PythonX86/Output/df.csv',index=0)
+df_LTF = df0.resample(str(lowTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成小週期分K
+df_HTF = df0.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成大週期分K
 
-data1 = []
-df.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-# df.to_csv('/Users/apple/Documents/code/PythonX86/Output/df.csv',index=0)
+nextMinute = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
+nextHour = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
+print(datetime.fromtimestamp(int(datetime.now().timestamp())),
+      'Market Closed.' if offMarket else 'Market Opened.K Bar label:'+str(nextMinute-nextMinute % lowTimeFrame))  # 顯示分K的開始分鐘數
+df_LTF.reset_index(inplace=True)
+df_HTF.reset_index(inplace=True)
+# df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
+# df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=0)
+
+data1 = []  # 紀錄tick
+df_LTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+# df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
+# df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=0)
 
 
 # 接收tick報價
 @api.quote.on_quote
 def q(topic, quote):
-    global NextMinute
-    global df
+    global nextMinute
+    global nextHour
+    global df_LTF
     global data1
     global closePrice
     global contract_txo
     global tradeRecord
-    global period
+    global lowTimeFrame
     global openTrade
     global optionDict
     ts = pd.Timestamp(quote['Date']+' '+quote['Time'][:8])  # 讀入Timestamp
@@ -324,14 +337,34 @@ def q(topic, quote):
     # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=0)
     
     # Timestamp在period或period的倍數時以及收盤時進行一次tick重組分K
-    if ts.minute/period == ts.minute//period and NextMinute != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
-        NextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
+    if ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
+        nextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
         #       'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+ts.strftime('%F %H:%M'))
-        resampleBar(period, data1)  # 重組K線
+        resampleBar(lowTimeFrame, data1)  # 重組K線
 
         # 進場訊號
-        signal = st._RSI(df)
+        signal = st._RSI(df_LTF)
+        
+        if ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextHour != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
+            nextHour = ts.minute  # 相同的minute1分鐘內只重組一次
+            df_res=df_LTF.copy()
+            df_res.ts = pd.to_datetime(df_res.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
+            df_res.index = df_res.ts  # 將ts資料，設定為DataFrame的index
+            df_HTF = df_res.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成大週期分K
+            df_HTF.reset_index(inplace=True)
+            # df_LTF.reset_index(inplace=True)
+            df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+            
+            
+            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute,ifActivateBot)
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute)
+            sendTelegram('60min K:'+str(ts.hour), token, chatid)
+            ifActivateBot=st._RSI(df_HTF)
+            print(df_LTF)
+            print(df_HTF)
+            
+            
         #依照設定更改動作
         readOrder()
         settingChange()
@@ -376,8 +409,8 @@ def q(topic, quote):
                     tradeRecord[openTrade[0]]['Tax']=tradeRecord[openTrade[0]]['Tax']+math.ceil(closePrice*50*0.001*tradeRecord[openTrade[0]]['Quantity'])  #紀錄稅
                     tradeRecord[openTrade[0]]['Realized PNL']=50*(tradeRecord[openTrade[0]]['Exit Price']-tradeRecord[openTrade[0]]['Entry Price']) #紀錄利潤
                     openTrade=[]    #清空未平倉紀錄
-                    toCSV(tradeRecord)  #存入csv
-                    tradeRecord={}  # 清空交易紀錄
+                    toCSV(tradeRecord,openTrade)  #存入csv
+                    # tradeRecord={}  # 清空交易紀錄
                     
         elif direction=='SELL':    #buy put
             if signal =='SELL':
@@ -399,7 +432,7 @@ def q(topic, quote):
                                                          'SL':5.
                                                          }
                     openTrade.append(list(tradeRecord.keys())[-1])
-                    toCSV(tradeRecord)
+                    toCSV(tradeRecord,openTrade)
                 elif len(openTrade)!=0:
                     pass
                 
@@ -416,8 +449,8 @@ def q(topic, quote):
                     tradeRecord[openTrade[0]]['Realized PNL']=50*(tradeRecord[openTrade[0]]['Exit Price']-tradeRecord[openTrade[0]]['Entry Price'])
                     
                     openTrade=[]
-                    toCSV(tradeRecord)    
-                    tradeRecord={}        
+                    toCSV(tradeRecord,openTrade)   
+                    # tradeRecord={}        
 
     # 設停損單（未完工）
     # if close<stopLossPrice:
@@ -427,15 +460,15 @@ def q(topic, quote):
 
 
 # 交易回報
-def place_cb(stat, msg):
-    print(datetime.fromtimestamp(int(datetime.now().timestamp())),
-          '__my_place_callback__')
-    print(datetime.fromtimestamp(int(datetime.now().timestamp())), stat, msg)
-    return
+# def place_cb(stat, msg):
+#     print(datetime.fromtimestamp(int(datetime.now().timestamp())),
+#           '__my_place_callback__')
+#     print(datetime.fromtimestamp(int(datetime.now().timestamp())), stat, msg)
+#     return
 
 # 重組ticks轉換5分K
-def resampleBar(period, data1):
-    global df
+def resampleBar(period,data1):
+    global df_LTF
     df1 = pd.DataFrame(data1, columns=['ts', 'Close'])  #用來暫存ticks
     df1.ts = pd.to_datetime(df1.ts)
     df1.index = df1.ts
@@ -448,10 +481,10 @@ def resampleBar(period, data1):
     df_res.reset_index(inplace=True)
     df_res.dropna(axis=0, how='any', inplace=True)  # 去掉空行
     if len(df_res.ts) != 0: #當有新的重組K線時
-        while df.iloc[-1, 0] >= df_res.iloc[0, 0]:  #以新的重組K線的資料為主，刪除歷史K線最後幾筆資料
-            df.drop(df.index[-1], axis=0, inplace=True)
-    df = pd.concat([df, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
-    # df.to_csv('/Users/apple/Documents/code/PythonX86/Output/df.csv',index=0)
+        while df_LTF.iloc[-1, 0] >= df_res.iloc[0, 0]:  #以新的重組K線的資料為主，刪除歷史K線最後幾筆資料
+            df_LTF.drop(df_LTF.index[-1], axis=0, inplace=True)
+    df_LTF = pd.concat([df_LTF, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
+    # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
     # df_res.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_res.csv',index=0)
     return
     
@@ -459,7 +492,7 @@ def resampleBar(period, data1):
 def selectOrder(action,quantity):
     global contract_txo
     global optionDict
-    global orderPrice
+    global closePrice
     
     order = api.Order(
         action=action.title(),
@@ -510,16 +543,10 @@ def symbol2Contract(symbol):
 # 將交易紀錄寫入csv
 def toCSV(tradeRecord,openTrade):
     df_tradeRecord=pd.DataFrame.from_dict(tradeRecord,orient='index')
-    if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
-        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',mode='w',index=1)
-    else:
-        df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',mode='a',index=1)
+    df_tradeRecord.to_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',mode='w',index=1)
         
     df_openTrade=pd.DataFrame(openTrade)
-    if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv'):
-        df_openTrade.to_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',mode='w',index=0)
-    else:
-        df_openTrade.to_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',mode='a',index=0)
+    df_openTrade.to_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',mode='w',index=0)
         
     return
 
