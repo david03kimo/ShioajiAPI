@@ -365,7 +365,7 @@ def q(topic, quote):
             
             # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute,ifActivateBot)
             # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute)
-            sendTelegram('60min K:'+str(ts.hour), token, chatid)
+            # sendTelegram('60min K:'+str(ts.hour), token, chatid)
             ifActivateBot=st._RSI(df_HTF)
             # print(df_LTF)
             # print(df_HTF)
