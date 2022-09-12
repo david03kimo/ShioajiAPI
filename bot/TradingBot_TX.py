@@ -20,12 +20,12 @@
 加上60分鐘線telegram提醒
 
 [未完工]
+在call-back函數之外再建立執行緒來計算
 多週期：三重濾網
 處理OrderState
 Live從API回報了解庫存
 未成交單子處理
 停損:半價
-在call-back函數之外再建立執行緒來計算
 觸價突破單
 加碼
 選擇權的訊號:同時要求許多連線，
@@ -342,7 +342,7 @@ def q(topic, quote):
     # df1.index = df1.ts
     # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=0)
     
-    # Timestamp在period或period的倍數時以及收盤時進行一次tick重組分K
+    # Timestamp在lowTimeFrame或lowTimeFrame的倍數時以及收盤時進行一次tick重組分K
     if ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
         nextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
@@ -361,14 +361,7 @@ def q(topic, quote):
             df_HTF.reset_index(inplace=True)
             # df_LTF.reset_index(inplace=True)
             df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-            
-            
-            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute,ifActivateBot)
-            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'nextHour',nextHour,ts.minute)
-            # sendTelegram('60min K:'+str(ts.hour), token, chatid)
             ifActivateBot=st._RSI(df_HTF)
-            # print(df_LTF)
-            # print(df_HTF)
             if direction=='BUY' and ifActivateBot =='BUY':  #進場訊號
                 print('Buy bot',ifActivateBot)
                 sendTelegram('60min K:Buy bot', token, chatid)
