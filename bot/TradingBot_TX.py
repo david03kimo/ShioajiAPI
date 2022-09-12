@@ -498,7 +498,7 @@ def selectOrder(action,quantity):
         action=action.title(),
         #  price=0.3, #價格
         # price=0,  # 價格
-        price=orderPrice-1,  # 價格
+        price=closePrice-1,  # 價格
         quantity=quantity,  # 口數
          price_type='LMT',
         # price_type='MKP',
