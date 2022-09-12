@@ -17,9 +17,9 @@
 報表，使用trade dict:reference IB API new design
 上github與別人交流
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
+加上60分鐘線telegram提醒
 
 [未完工]
-加上60分鐘線telegram提醒
 多週期：三重濾網
 處理OrderState
 Live從API回報了解庫存
