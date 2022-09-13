@@ -254,6 +254,10 @@ def fromCSV():
         list_openTrade=df_openTrade.loc[0].to_list()
         # print(dict_tradeRecord,list_openTrade)
         return dict_tradeRecord,list_openTrade
+    
+# 檢查是否為休市期間
+def ifOffMarket():
+    return (datetime.now().strftime('%H:%M') >='05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] 
         
 # 基本設定
 # 呼叫策略函式
@@ -261,7 +265,7 @@ StrategyType = 'API'  # 告訴策略用API方式來處理訊號
 st = Strategies(StrategyType)   # 策略函式
 rm = RiskManage(StrategyType, 2)    # 風控函式
 
-offMarket = (datetime.now().strftime('%H:%M') >='05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
+offMarket =ifOffMarket()   # 是否交易時間之外
 placedOrder = 0  # 一開始下單次數為零
 # 紀錄來與新的紀錄比對
 accountType0=''
@@ -338,7 +342,7 @@ def q(topic, quote):
     # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=0)
     
     # Timestamp在lowTimeFrame或lowTimeFrame的倍數時以及收盤時進行一次tick重組分K
-    offMarket = (datetime.now().strftime('%H:%M') >='05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
+    offMarket =ifOffMarket()   # 是否交易時間之外
     if ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
         nextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
