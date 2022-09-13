@@ -231,14 +231,14 @@ def fromCSV():
     list_openTrade=[]
     
     if not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv'):
-        print({},[])
+        # print({},[])
         return {},[]
     elif os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv') and not os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv'):
         df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
         for index in df_tradeRecord.index:
             dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
             # dict_tradeRecord.drop(index=dict_tradeRecord[dict_tradeRecord['Exit Price']==0].index,axis = 0,inplace = True)
-        print(dict_tradeRecord,[])
+        # print(dict_tradeRecord,[])
         return dict_tradeRecord,[]
     elif os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv') and os.path.isfile('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv'):
         df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/tradeRecord.csv',index_col=0)
@@ -249,10 +249,10 @@ def fromCSV():
             df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv')
             # df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/Output/openTrade.csv',index=0)
         except:
-            print(dict_tradeRecord,[])
+            # print(dict_tradeRecord,[])
             return dict_tradeRecord,[]
         list_openTrade=df_openTrade.loc[0].to_list()
-        print(dict_tradeRecord,list_openTrade)
+        # print(dict_tradeRecord,list_openTrade)
         return dict_tradeRecord,list_openTrade
         
 # 基本設定
@@ -261,10 +261,7 @@ StrategyType = 'API'  # 告訴策略用API方式來處理訊號
 st = Strategies(StrategyType)   # 策略函式
 rm = RiskManage(StrategyType, 2)    # 風控函式
 
-nowTime = datetime.now().strftime('%H:%M')
-offMarket = (nowTime >='05:00' and nowTime < '08:45') or (nowTime > '13:45' and nowTime < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
-print(datetime.fromtimestamp(int(datetime.now().timestamp())),
-      'Shioaji API start!', 'Market Closed' if offMarket else 'Market Opened')
+offMarket = (datetime.now().strftime('%H:%M') >='05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
 placedOrder = 0  # 一開始下單次數為零
 # 紀錄來與新的紀錄比對
 accountType0=''
@@ -304,8 +301,6 @@ df_HTF = df0.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(
 
 nextMinute = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
 nextHour = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
-print(datetime.fromtimestamp(int(datetime.now().timestamp())),
-      'Market Closed.' if offMarket else 'Market Opened.K Bar label:'+str(nextMinute-nextMinute % lowTimeFrame))  # 顯示分K的開始分鐘數
 df_LTF.reset_index(inplace=True)
 df_HTF.reset_index(inplace=True)
 # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
@@ -343,6 +338,7 @@ def q(topic, quote):
     # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=0)
     
     # Timestamp在lowTimeFrame或lowTimeFrame的倍數時以及收盤時進行一次tick重組分K
+    offMarket = (datetime.now().strftime('%H:%M') >='05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7]   # 交易時間之外
     if ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
         nextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
@@ -412,7 +408,7 @@ def q(topic, quote):
                     tradeRecord[openTrade[0]]['Exit Price']=closePrice  #紀錄出場價格
                     tradeRecord[openTrade[0]]['Commision']=tradeRecord[openTrade[0]]['Commision']+18*tradeRecord[openTrade[0]]['Quantity']  #紀錄手續費
                     tradeRecord[openTrade[0]]['Tax']=tradeRecord[openTrade[0]]['Tax']+math.ceil(closePrice*50*0.001*tradeRecord[openTrade[0]]['Quantity'])  #紀錄稅
-                    tradeRecord[openTrade[0]]['Realized PNL']=50*(tradeRecord[openTrade[0]]['Exit Price']-tradeRecord[openTrade[0]]['Entry Price']) #紀錄利潤
+                    tradeRecord[openTrade[0]]['Realized PNL']=round(50*(tradeRecord[openTrade[0]]['Exit Price']-tradeRecord[openTrade[0]]['Entry Price']),0) #紀錄利潤
                     openTrade=[]    #清空未平倉紀錄
                     toCSV(tradeRecord,openTrade)  #存入csv
                     # tradeRecord={}  # 清空交易紀錄
@@ -451,7 +447,7 @@ def q(topic, quote):
                     tradeRecord[openTrade[0]]['Exit Price']=closePrice
                     tradeRecord[openTrade[0]]['Commision']=tradeRecord[openTrade[0]]['Commision']+18*tradeRecord[openTrade[0]]['Quantity']
                     tradeRecord[openTrade[0]]['Tax']=tradeRecord[openTrade[0]]['Tax']+math.ceil(closePrice*50*0.001*tradeRecord[openTrade[0]]['Quantity'])
-                    tradeRecord[openTrade[0]]['Realized PNL']=50*(tradeRecord[openTrade[0]]['Exit Price']-tradeRecord[openTrade[0]]['Entry Price'])
+                    tradeRecord[openTrade[0]]['Realized PNL']=round(50*(tradeRecord[openTrade[0]]['Exit Price']-tradeRecord[openTrade[0]]['Entry Price']),0)
                     
                     openTrade=[]
                     toCSV(tradeRecord,openTrade)   
