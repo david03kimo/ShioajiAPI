@@ -21,13 +21,16 @@
 
 [未完工]
 在call-back函數之外再建立執行緒來計算
+增加日週期
 多週期：三重濾網
 處理OrderState
 Live從API回報了解庫存
 未成交單子處理
 停損:半價
 觸價突破單
+
 加碼
+績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
 選擇權的訊號:同時要求許多連線，
 tradingview來啟動 to IB&SinoPac API.
 周選合約裡面找划算的
@@ -100,7 +103,7 @@ def readOrder():
     orderCount=int(a[0])    #下單的次數限制
     
     direction = a[1].upper()    #操作的方向：多、空
-    if direction not in ['BUY', 'SELL']:
+    if direction not in ['BUY', 'SELL','WAIT']:
         print('Wrong Action!!!')
         c = input('___________________')
 
@@ -257,7 +260,7 @@ def fromCSV():
     
 # 檢查是否為休市期間
 def ifOffMarket():
-    return (datetime.now().strftime('%H:%M') >='05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] 
+    return (datetime.now().strftime('%H:%M') >'05:01' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:46' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] 
         
 # 基本設定
 # 呼叫策略函式
@@ -285,6 +288,9 @@ tradeRecord,openTrade=fromCSV()
 
 # 歷史報價
 api.quote.subscribe(contract_txf)  # 訂閱即時ticks資料
+# today=datetime.now().strftime('%F')
+# beforeYesterday=(datetime.now()-timedelta(days=2)).strftime('%F')
+# kbars = api.kbars(contract_txf, start=beforeYesterday, end=today)  # 讀入歷史1分K
 kbars = api.kbars(contract_txf)  # 讀入歷史1分K
 df0 = pd.DataFrame({**kbars})  # 先將Kbars物件轉換為Dict，再傳入DataFrame做轉換
 df0.ts = pd.to_datetime(df0.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
@@ -343,7 +349,7 @@ def q(topic, quote):
     
     # Timestamp在lowTimeFrame或lowTimeFrame的倍數時以及收盤時進行一次tick重組分K
     offMarket =ifOffMarket()   # 是否交易時間之外
-    if ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
+    if (not offMarket and ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and datetime.now().isoweekday() in [1,2,3,4,5]):
         nextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
         #       'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+ts.strftime('%F %H:%M'))
@@ -352,7 +358,7 @@ def q(topic, quote):
         # 進場訊號
         signal = st._RSI(df_LTF)
         
-        if ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextHour != ts.minute or datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and not offMarket:
+        if (not offMarket and ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextHour != ts.minute) or (datetime.now().strftime('%H:%M') in ['05:00'] and datetime.now().isoweekday() in [1,2,3,4,5]):
             nextHour = ts.minute  # 相同的minute1分鐘內只重組一次
             df_res=df_LTF.copy()
             df_res.ts = pd.to_datetime(df_res.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
@@ -361,13 +367,14 @@ def q(topic, quote):
             df_HTF.reset_index(inplace=True)
             # df_LTF.reset_index(inplace=True)
             df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+            # print(df_HTF)
             ifActivateBot=st._RSI(df_HTF)
-            if direction=='BUY' and ifActivateBot =='BUY':  #進場訊號
-                print('Buy bot',ifActivateBot)
-                sendTelegram('60min K:Buy bot', token, chatid)
-            elif direction=='SELL' and ifActivateBot =='SELL':  
-                print('Sell bot',ifActivateBot)
-                sendTelegram('60min K:Sell bot', token, chatid)
+            if ifActivateBot =='BUY':  #進場訊號
+                print('1H RSI low',ifActivateBot)
+                sendTelegram('1H RSI low', token, chatid)
+            elif ifActivateBot =='SELL':  
+                print('1H RSI high',ifActivateBot)
+                sendTelegram('1H RSI high', token, chatid) 
             
             
         #依照設定更改動作
@@ -482,7 +489,10 @@ def resampleBar(period,data1):
         str(period)+'min', closed='left', label='left').agg(resDict)  # tick重組分K
     del data1[0:len(data1)-1]  # 只保留最新的一筆tick，減少記憶體佔用
     df_res.drop(df_res.index[-1], axis=0, inplace=True)  # 去掉最新的一筆分K，減少記憶體佔用
-    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+df_res.index[-1].strftime('%F %H:%M'))
+    try:
+        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+df_res.index[-1].strftime('%F %H:%M'))
+    except:
+        pass
     df_res.reset_index(inplace=True)
     df_res.dropna(axis=0, how='any', inplace=True)  # 去掉空行
     if len(df_res.ts) != 0: #當有新的重組K線時
