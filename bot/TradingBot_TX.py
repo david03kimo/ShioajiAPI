@@ -19,18 +19,17 @@
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
 加上60分鐘線telegram提醒
 
+[測試]
+沒有小時訊號
+
 [未完工]
-在call-back函數之外再建立執行緒來計算
-增加日週期
-多週期：三重濾網
-處理OrderState
-Live從API回報了解庫存
-未成交單子處理
 停損:半價
 觸價突破單
-
-加碼
+增加日週期：多週期：三重濾網
+在call-back函數之外再建立執行緒來計算
+處理OrderState，Live從API回報了解庫存，未成交單子處理
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
+加碼
 選擇權的訊號:同時要求許多連線，
 tradingview來啟動 to IB&SinoPac API.
 周選合約裡面找划算的
@@ -260,7 +259,7 @@ def fromCSV():
     
 # 檢查是否為休市期間
 def ifOffMarket():
-    return (datetime.now().strftime('%H:%M') >'05:01' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:46' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] 
+    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] 
         
 # 基本設定
 # 呼叫策略函式
@@ -339,7 +338,7 @@ def q(topic, quote):
     ts = pd.Timestamp(quote['Date']+' '+quote['Time'][:8])  # 讀入Timestamp
     close = quote['Close'][0] if isinstance(
         quote['Close'], list) else quote['Close']  # 放入tick值
-    data1.append([ts, close])
+    
 
     # 測試用
     # df1 = pd.DataFrame(data1,columns=['ts','Close'])
@@ -349,7 +348,9 @@ def q(topic, quote):
     
     # Timestamp在lowTimeFrame或lowTimeFrame的倍數時以及收盤時進行一次tick重組分K
     offMarket =ifOffMarket()   # 是否交易時間之外
-    if (not offMarket and ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and datetime.now().isoweekday() in [1,2,3,4,5]):
+    if not offMarket:
+        data1.append([ts, close])
+    if (not offMarket and ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and nextMinute != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
         nextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
         #       'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+ts.strftime('%F %H:%M'))
@@ -358,7 +359,7 @@ def q(topic, quote):
         # 進場訊號
         signal = st._RSI(df_LTF)
         
-        if (not offMarket and ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextHour != ts.minute) or (datetime.now().strftime('%H:%M') in ['05:00'] and datetime.now().isoweekday() in [1,2,3,4,5]):
+        if (not offMarket and ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextHour != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextHour != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
             nextHour = ts.minute  # 相同的minute1分鐘內只重組一次
             df_res=df_LTF.copy()
             df_res.ts = pd.to_datetime(df_res.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
