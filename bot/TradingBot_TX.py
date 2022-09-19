@@ -19,8 +19,9 @@
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
 加上60分鐘線telegram提醒
 
-[測試]
+[bugs]
 沒有小時訊號
+週一一早第一根K線
 
 [未完工]
 停損:半價
@@ -287,10 +288,12 @@ tradeRecord,openTrade=fromCSV()
 
 # 歷史報價
 api.quote.subscribe(contract_txf)  # 訂閱即時ticks資料
-# today=datetime.now().strftime('%F')
-# beforeYesterday=(datetime.now()-timedelta(days=2)).strftime('%F')
-# kbars = api.kbars(contract_txf, start=beforeYesterday, end=today)  # 讀入歷史1分K
-kbars = api.kbars(contract_txf)  # 讀入歷史1分K
+today=datetime.now().strftime('%F')
+beforeYesterday=(datetime.now()-timedelta(days=1))
+if beforeYesterday.isoweekday() ==7:
+    beforeYesterday=(datetime.now()-timedelta(days=3)).strftime('%F')
+kbars = api.kbars(contract_txf, start=beforeYesterday, end=today)  # 讀入歷史1分K
+# kbars = api.kbars(contract_txf)  # 讀入歷史1分K
 df0 = pd.DataFrame({**kbars})  # 先將Kbars物件轉換為Dict，再傳入DataFrame做轉換
 df0.ts = pd.to_datetime(df0.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
 df0.index = df0.ts  # 將ts資料，設定為DataFrame的index
@@ -359,7 +362,7 @@ def q(topic, quote):
         # 進場訊號
         signal = st._RSI(df_LTF)
         
-        if (not offMarket and ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextHour != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextHour != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
+        if (ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextHour != ts.minute) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextHour != ts.minute):
             nextHour = ts.minute  # 相同的minute1分鐘內只重組一次
             df_res=df_LTF.copy()
             df_res.ts = pd.to_datetime(df_res.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
@@ -368,7 +371,7 @@ def q(topic, quote):
             df_HTF.reset_index(inplace=True)
             # df_LTF.reset_index(inplace=True)
             df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-            # print(df_HTF)
+            print(df_HTF.tail(5))
             ifActivateBot=st._RSI(df_HTF)
             if ifActivateBot =='BUY':  #進場訊號
                 print('1H RSI low',ifActivateBot)
