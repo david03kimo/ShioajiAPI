@@ -325,11 +325,11 @@ df_HTF.reset_index(inplace=True)
 data1 = []  # 紀錄tick
 df_LTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
 df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-df_LTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
-df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+df_LTF.reset_index(drop=True, inplace=True)   # 重置index保持連續避免dataframe操作錯誤
+df_HTF.reset_index(drop=True, inplace=True)   # 重置index保持連續避免dataframe操作錯誤
 
-# df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
-# df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=0)
+# df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=1)
+df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=1)
 
 
 # 接收tick報價
@@ -375,19 +375,24 @@ def q(topic, quote):
         signal = st._RSI(df_LTF)
         
         # 判斷是否大週期收K線
-        if (int(datetime.now().timestamp())/(highTimeFrame*60) == int(datetime.now().timestamp())//(highTimeFrame*60) and nextMinuteHTF != datetime.now().strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and datetime.now().strftime('%H:%M')):
-            # print(int(datetime.now().timestamp())/(highTimeFrame*60),'=',int(datetime.now().timestamp())//(highTimeFrame*60))
-            nextMinuteHTF = datetime.now().strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
+        # if (int(datetime.now().timestamp())/(highTimeFrame*60) == int(datetime.now().timestamp())//(highTimeFrame*60) and nextMinuteHTF != datetime.now().strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and datetime.now().strftime('%H:%M')):
+        # if (unixtime/(highTimeFrame*60) == unixtime//(highTimeFrame*60) and nextMinuteHTF != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinuteHTF != ts.strftime('%H:%M')):
+        if (ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextMinuteHTF != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinuteHTF != ts.strftime('%H:%M')):
+            print(int(datetime.now().timestamp()/(highTimeFrame*60))-int(unixtime/(highTimeFrame*60)))
+            nextMinuteHTF = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
             df_res=df_LTF.copy()
             df_res.ts = pd.to_datetime(df_res.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
             df_res.index = df_res.ts  # 將ts資料，設定為DataFrame的index
             df_HTF = df_res.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成大週期分K
-            df_HTF.reset_index(inplace=True)
+            # df_HTF.reset_index(inplace=True)
             # df_LTF.reset_index(inplace=True)
             df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-            df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+            # df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+            df_HTF.reset_index(drop=True)
             # print(df_HTF.tail(3))
-            ifActivateBot=st._RSI(df_HTF)
+            df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=1)
+
+            ifActivateBot=st._RSI_HTF(df_HTF)
             if ifActivateBot =='BUY':  #進場訊號
                 print(str(highTimeFrame)+'m RSI low',ifActivateBot)
                 sendTelegram(str(highTimeFrame)+'m RSI low', token, chatid)
@@ -519,8 +524,8 @@ def resampleBar(period,data1):
             df_LTF.drop(df_LTF.index[-1], axis=0, inplace=True)
     df_LTF = pd.concat([df_LTF, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
     # print(df_LTF)
-    # df_LTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
-    # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
+    df_LTF.reset_index(inplace=True,drop=True)   # 重置index保持連續避免dataframe操作錯誤
+    # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=1)
     # df_res.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_res.csv',index=0)
     return
     
