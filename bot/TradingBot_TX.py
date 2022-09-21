@@ -31,8 +31,10 @@
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
 加碼
+即時回測
 選擇權的訊號:同時要求許多連線，
 tradingview來啟動 to IB&SinoPac API.
+修正nexthour為unix時間可以自訂HTF
 周選合約裡面找划算的
 交易股票期貨
 
@@ -64,8 +66,8 @@ PI = str(config.get('Login', 'PersonalId'))
 PWD = str(config.get('Login', 'PassWord'))
 CAPath = str(config.get('Login', 'CAPath'))
 CAPWD = str(config.get('Login', 'CAPassWord'))
-lowTimeFrame = int(config.get('Trade', 'lowTimeFrame')) # 讀入交易設定：K線週期
-highTimeFrame = int(config.get('Trade', 'highTimeFrame')) # 讀入交易設定：K線週期
+lowTimeFrame = int(config.get('Trade', 'lowTimeFrame')) # 讀入交易設定：小週期K線週期
+highTimeFrame = int(config.get('Trade', 'highTimeFrame')) # 讀入交易設定：大週期K線週期
 nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
 
 # 登入帳號
@@ -292,6 +294,8 @@ today=datetime.now().strftime('%F')
 beforeYesterday=(datetime.now()-timedelta(days=1))
 if beforeYesterday.isoweekday() ==7:
     beforeYesterday=(datetime.now()-timedelta(days=3)).strftime('%F')
+else:
+    beforeYesterday=(datetime.now()-timedelta(days=1)).strftime('%F')
 kbars = api.kbars(contract_txf, start=beforeYesterday, end=today)  # 讀入歷史1分K
 # kbars = api.kbars(contract_txf)  # 讀入歷史1分K
 df0 = pd.DataFrame({**kbars})  # 先將Kbars物件轉換為Dict，再傳入DataFrame做轉換
@@ -311,8 +315,8 @@ optionDict = {'OptionRight.Call': 'Call', 'OptionRight.Put':'Put'}
 df_LTF = df0.resample(str(lowTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成小週期分K
 df_HTF = df0.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成大週期分K
 
-nextMinute = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
-nextHour = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
+nextMinuteLTF = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
+nextMinuteHTF = datetime.now().strftime('%H:%M')  # 紀錄最新一筆分K的分鐘數進行比對
 df_LTF.reset_index(inplace=True)
 df_HTF.reset_index(inplace=True)
 # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
@@ -321,6 +325,9 @@ df_HTF.reset_index(inplace=True)
 data1 = []  # 紀錄tick
 df_LTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
 df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+df_LTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+
 # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
 # df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=0)
 
@@ -328,8 +335,8 @@ df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
 # 接收tick報價
 @api.quote.on_quote
 def q(topic, quote):
-    global nextMinute
-    global nextHour
+    global nextMinuteLTF
+    global nextMinuteHTF
     global df_LTF
     global data1
     global closePrice
@@ -353,17 +360,24 @@ def q(topic, quote):
     offMarket =ifOffMarket()   # 是否交易時間之外
     if not offMarket:
         data1.append([ts, close])
-    if (not offMarket and ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinute != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and nextMinute != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
-        nextMinute = ts.minute  # 相同的minute1分鐘內只重組一次
+    # 判斷是否小週期收K線
+    if (not offMarket and ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinuteLTF != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and nextMinuteLTF != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
+        nextMinuteLTF = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
         #       'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+ts.strftime('%F %H:%M'))
         resampleBar(lowTimeFrame, data1)  # 重組K線
+        
+        
+        unixtime = time.mktime(ts.timetuple())
+        # print(unixtime/(highTimeFrame*60),unixtime//(highTimeFrame*60),datetime.now().timestamp(),unixtime,ts)
 
         # 進場訊號
         signal = st._RSI(df_LTF)
         
-        if (ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextHour != ts.minute) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextHour != ts.minute):
-            nextHour = ts.minute  # 相同的minute1分鐘內只重組一次
+        # 判斷是否大週期收K線
+        if (int(datetime.now().timestamp())/(highTimeFrame*60) == int(datetime.now().timestamp())//(highTimeFrame*60) and nextMinuteHTF != datetime.now().strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and datetime.now().strftime('%H:%M')):
+            # print(int(datetime.now().timestamp())/(highTimeFrame*60),'=',int(datetime.now().timestamp())//(highTimeFrame*60))
+            nextMinuteHTF = datetime.now().strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
             df_res=df_LTF.copy()
             df_res.ts = pd.to_datetime(df_res.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
             df_res.index = df_res.ts  # 將ts資料，設定為DataFrame的index
@@ -371,14 +385,15 @@ def q(topic, quote):
             df_HTF.reset_index(inplace=True)
             # df_LTF.reset_index(inplace=True)
             df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-            print(df_HTF.tail(5))
+            df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+            # print(df_HTF.tail(3))
             ifActivateBot=st._RSI(df_HTF)
             if ifActivateBot =='BUY':  #進場訊號
-                print('1H RSI low',ifActivateBot)
-                sendTelegram('1H RSI low', token, chatid)
+                print(str(highTimeFrame)+'m RSI low',ifActivateBot)
+                sendTelegram(str(highTimeFrame)+'m RSI low', token, chatid)
             elif ifActivateBot =='SELL':  
-                print('1H RSI high',ifActivateBot)
-                sendTelegram('1H RSI high', token, chatid) 
+                print(str(highTimeFrame)+'m RSI high',ifActivateBot)
+                sendTelegram(str(highTimeFrame)+'m RSI high', token, chatid) 
             
             
         #依照設定更改動作
@@ -503,6 +518,8 @@ def resampleBar(period,data1):
         while df_LTF.iloc[-1, 0] >= df_res.iloc[0, 0]:  #以新的重組K線的資料為主，刪除歷史K線最後幾筆資料
             df_LTF.drop(df_LTF.index[-1], axis=0, inplace=True)
     df_LTF = pd.concat([df_LTF, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
+    # print(df_LTF)
+    # df_LTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
     # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
     # df_res.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_res.csv',index=0)
     return
