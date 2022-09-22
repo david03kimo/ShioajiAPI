@@ -18,23 +18,22 @@
 上github與別人交流
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
 加上60分鐘線telegram提醒
+沒有小時訊號
 
 [bugs]
-沒有小時訊號
 週一一早第一根K線
 
 [未完工]
-停損:半價
-觸價突破單
-增加日週期：多週期：三重濾網
+刪除df0節省記憶體
 在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
+增加日週期：多週期：三重濾網，選擇權的訊號:同時要求許多連線
+停損:半價
+觸價突破單
 加碼
 即時回測
-選擇權的訊號:同時要求許多連線，
 tradingview來啟動 to IB&SinoPac API.
-修正nexthour為unix時間可以自訂HTF
 周選合約裡面找划算的
 交易股票期貨
 
@@ -313,23 +312,23 @@ resDict = {
 # 從合約讀取選擇權形式字典
 optionDict = {'OptionRight.Call': 'Call', 'OptionRight.Put':'Put'}
 df_LTF = df0.resample(str(lowTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成小週期分K
+df_LTF.reset_index(inplace=True)
 df_HTF = df0.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成大週期分K
+df_HTF.reset_index(inplace=True)
 
 nextMinuteLTF = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
 nextMinuteHTF = datetime.now().strftime('%H:%M')  # 紀錄最新一筆分K的分鐘數進行比對
-df_LTF.reset_index(inplace=True)
-df_HTF.reset_index(inplace=True)
 # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
 # df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=0)
 
 data1 = []  # 紀錄tick
 df_LTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+df_LTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
 df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-df_LTF.reset_index(drop=True, inplace=True)   # 重置index保持連續避免dataframe操作錯誤
-df_HTF.reset_index(drop=True, inplace=True)   # 重置index保持連續避免dataframe操作錯誤
+df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
 
 # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=1)
-df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=1)
+# df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=1)
 
 
 # 接收tick報價
@@ -390,7 +389,7 @@ def q(topic, quote):
             # df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
             df_HTF.reset_index(drop=True)
             # print(df_HTF.tail(3))
-            df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=1)
+            # df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=1)
 
             ifActivateBot=st._RSI_HTF(df_HTF)
             if ifActivateBot =='BUY':  #進場訊號
@@ -524,7 +523,7 @@ def resampleBar(period,data1):
             df_LTF.drop(df_LTF.index[-1], axis=0, inplace=True)
     df_LTF = pd.concat([df_LTF, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
     # print(df_LTF)
-    df_LTF.reset_index(inplace=True,drop=True)   # 重置index保持連續避免dataframe操作錯誤
+    df_LTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
     # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=1)
     # df_res.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_res.csv',index=0)
     return
