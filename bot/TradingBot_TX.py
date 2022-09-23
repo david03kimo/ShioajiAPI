@@ -19,12 +19,12 @@
 交易紀錄存在CSV可以延續不因程式中斷而重新計算
 加上60分鐘線telegram提醒
 沒有小時訊號
+刪除df0節省記憶體
 
 [bugs]
 週一一早第一根K線
 
 [未完工]
-刪除df0節省記憶體
 在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
@@ -261,6 +261,7 @@ def fromCSV():
     
 # 檢查是否為休市期間
 def ifOffMarket():
+    # print('1',(datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45'),'2',(datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00'),'3',(datetime.now().isoweekday() in [6, 7]),'4',((datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] ))
     return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] 
         
 # 基本設定
@@ -315,6 +316,7 @@ df_LTF = df0.resample(str(lowTimeFrame)+'min', closed='left',label='left').agg(r
 df_LTF.reset_index(inplace=True)
 df_HTF = df0.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成大週期分K
 df_HTF.reset_index(inplace=True)
+df0.drop(df0.index, inplace=True) #清空df0節省記憶體
 
 nextMinuteLTF = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
 nextMinuteHTF = datetime.now().strftime('%H:%M')  # 紀錄最新一筆分K的分鐘數進行比對
@@ -377,7 +379,7 @@ def q(topic, quote):
         # if (int(datetime.now().timestamp())/(highTimeFrame*60) == int(datetime.now().timestamp())//(highTimeFrame*60) and nextMinuteHTF != datetime.now().strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and datetime.now().strftime('%H:%M')):
         # if (unixtime/(highTimeFrame*60) == unixtime//(highTimeFrame*60) and nextMinuteHTF != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinuteHTF != ts.strftime('%H:%M')):
         if (ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextMinuteHTF != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinuteHTF != ts.strftime('%H:%M')):
-            print(int(datetime.now().timestamp()/(highTimeFrame*60))-int(unixtime/(highTimeFrame*60)))
+            # print(int(datetime.now().timestamp()/(highTimeFrame*60))-int(unixtime/(highTimeFrame*60)))
             nextMinuteHTF = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
             df_res=df_LTF.copy()
             df_res.ts = pd.to_datetime(df_res.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
@@ -393,10 +395,10 @@ def q(topic, quote):
 
             ifActivateBot=st._RSI_HTF(df_HTF)
             if ifActivateBot =='BUY':  #進場訊號
-                print(str(highTimeFrame)+'m RSI low',ifActivateBot)
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(highTimeFrame)+'m RSI low')
                 sendTelegram(str(highTimeFrame)+'m RSI low', token, chatid)
             elif ifActivateBot =='SELL':  
-                print(str(highTimeFrame)+'m RSI high',ifActivateBot)
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(highTimeFrame)+'m RSI high')
                 sendTelegram(str(highTimeFrame)+'m RSI high', token, chatid) 
             
             
@@ -504,6 +506,7 @@ def q(topic, quote):
 # 重組ticks轉換5分K
 def resampleBar(period,data1):
     global df_LTF
+    global offMarket
     df1 = pd.DataFrame(data1, columns=['ts', 'Close'])  #用來暫存ticks
     df1.ts = pd.to_datetime(df1.ts)
     df1.index = df1.ts
@@ -512,6 +515,7 @@ def resampleBar(period,data1):
         str(period)+'min', closed='left', label='left').agg(resDict)  # tick重組分K
     del data1[0:len(data1)-1]  # 只保留最新的一筆tick，減少記憶體佔用
     df_res.drop(df_res.index[-1], axis=0, inplace=True)  # 去掉最新的一筆分K，減少記憶體佔用
+    # print('offMarket',offMarket)
     try:
         print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+df_res.index[-1].strftime('%F %H:%M'))
     except:
