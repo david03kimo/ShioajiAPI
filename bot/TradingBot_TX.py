@@ -23,15 +23,16 @@
 
 [bugs]
 週一一早第一根K線
+修正大盤為期指作為履約標的
 
 [未完工]
 在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
+加碼
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
 增加日週期：多週期：三重濾網，選擇權的訊號:同時要求許多連線
 停損:半價
 觸價突破單
-加碼
 即時回測
 tradingview來啟動 to IB&SinoPac API.
 周選合約裡面找划算的
@@ -395,9 +396,11 @@ def q(topic, quote):
 
             ifActivateBot=st._RSI_HTF(df_HTF)
             if ifActivateBot =='BUY':  #進場訊號
+                directionHTF='BUY'
                 print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(highTimeFrame)+'m RSI low')
                 sendTelegram(str(highTimeFrame)+'m RSI low', token, chatid)
-            elif ifActivateBot =='SELL':  
+            elif ifActivateBot =='SELL':
+                directionHTF='SELL'
                 print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(highTimeFrame)+'m RSI high')
                 sendTelegram(str(highTimeFrame)+'m RSI high', token, chatid) 
             
@@ -408,7 +411,7 @@ def q(topic, quote):
 
         # 訊號處理
         if direction=='BUY':    #buy call
-            if signal =='BUY':  #進場訊號
+            if signal =='BUY' and directionHTF=='BUY':  #進場訊號
                 if len(openTrade)==0:
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -450,7 +453,7 @@ def q(topic, quote):
                     # tradeRecord={}  # 清空交易紀錄
                     
         elif direction=='SELL':    #buy put
-            if signal =='SELL':
+            if signal =='SELL' and directionHTF=='SELL':
                 if len(openTrade)==0:
                     contract_txo = selectOption()
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
