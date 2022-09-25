@@ -412,7 +412,7 @@ def q(topic, quote):
 
         # 訊號處理
         if direction=='BUY':    #buy call
-            if signal =='BUY' and directionHTF=='BUY':  #進場訊號
+            if signal =='BUY' and directionHTF=='BUY':  #進場訊號 # 設突破單（未完工） if close>breakOutPrice:
                 if len(openTrade)==0:
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -438,7 +438,7 @@ def q(topic, quote):
                 elif len(openTrade)!=0:     #如果未平倉不為零，留作未來加碼用
                     pass
             
-            elif signal=='SELL':    #出場訊號
+            elif signal=='SELL':    #出場訊號 # 設停損單（未完工）if close<stopLossPrice:
                 if len(openTrade)!=0:   #有部位
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -454,7 +454,7 @@ def q(topic, quote):
                     # tradeRecord={}  # 清空交易紀錄
                     
         elif direction=='SELL':    #buy put
-            if signal =='SELL' and directionHTF=='SELL':
+            if signal =='SELL' and directionHTF=='SELL':    # 設突破單（未完工） if close>breakOutPrice:
                 if len(openTrade)==0:
                     contract_txo = selectOption()
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -477,7 +477,7 @@ def q(topic, quote):
                 elif len(openTrade)!=0:
                     pass
                 
-            elif signal=='BUY':
+            elif signal=='BUY': # 設停損單（未完工）if close<stopLossPrice:
                 if len(openTrade)!=0:
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol'])
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -492,13 +492,6 @@ def q(topic, quote):
                     openTrade=[]
                     toCSV(tradeRecord,openTrade)   
                     # tradeRecord={}        
-
-    # 設停損單（未完工）
-    # if close<stopLossPrice:
-
-    # 設突破單（未完工）
-    # if close>breakOutPrice:
-
 
 # 交易回報
 # def place_cb(stat, msg):
