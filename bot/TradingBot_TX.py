@@ -20,10 +20,12 @@
 加上60分鐘線telegram提醒
 沒有小時訊號
 刪除df0節省記憶體
+週一一早第一根K線有問題
+增加大週期：三週期
 
 [bugs]
-週一一早第一根K線
 修正大盤為期指作為履約標的
+收盤沒有收K線
 
 [未完工]
 在call-back函數之外再建立執行緒來計算
@@ -31,8 +33,8 @@
 選擇權的報價
 停損:半價
 加碼
-增加日週期：多週期：三重濾網
 觸價突破單
+三重濾網
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
 即時回測
 tradingview來啟動 to IB&SinoPac API.
@@ -67,8 +69,9 @@ PI = str(config.get('Login', 'PersonalId'))
 PWD = str(config.get('Login', 'PassWord'))
 CAPath = str(config.get('Login', 'CAPath'))
 CAPWD = str(config.get('Login', 'CAPassWord'))
-lowTimeFrame = int(config.get('Trade', 'lowTimeFrame')) # 讀入交易設定：小週期K線週期
-highTimeFrame = int(config.get('Trade', 'highTimeFrame')) # 讀入交易設定：大週期K線週期
+timeFrame1 = int(config.get('Trade', 'timeFrame1')) # 讀入交易設定：小週期K線週期
+timeFrame2 = int(config.get('Trade', 'timeFrame2')) # 讀入交易設定：中週期K線週期
+timeFrame3 = int(config.get('Trade', 'timeFrame3')) # 讀入交易設定：中週期K線週期
 nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
 
 # 登入帳號
@@ -156,80 +159,7 @@ def selectFutures():
     contract=api.Contracts.Futures['TXF'][sym]
     return contract
 
-# 選定選擇權合約
-def selectOption():
-    '''
-    需要把所有大盤上下10檔都snapshop出報價來選擇一定價格以下的合約
-    '''
-    global orderPrice
-    
-    # 計算今年每個月的結算日
-    year = datetime.now().year
-    month = datetime.now().month
-    day = datetime.now().day
-    settleDict={}   # 紀錄今年所有月份的結算日
-    sday=0  #本月第一個週三是幾日
-    for month in range(1,13):
-        weekday=dt.date(year,month,1).isoweekday()  # 計算每個月1日為週幾
-        weeks=0
-        settleDict[month]={}
-        
-        #第一個週三為幾日
-        if weekday>3:
-            sday=1+10-weekday   
-        elif weekday <=3:
-            sday=1+3-weekday
-        for n in range(0,5):
-            weeks=n+1
-            
-            if sday+n*7>calendar.monthrange(year, month)[1] :   #以每月最後一日為限計算有幾個週三
-                pass  
-            else:
-                settleDict[month][n+1]=dt.datetime(year,month,sday+n*7,8,45,0).strftime("%F %H:%M:%S")  # 紀錄每個月結算日
-                
-    for m in settleDict.keys():
-        for w in settleDict[m].keys():
-            if settleDict[m][w]>datetime.now().strftime("%F %H:%M:%S"): #比對哪個週結算日超過目前日期，此為最近的週結算日
-                month=m
-                weeks=w
-                break   # 跳出所有迴圈
-        else:
-            continue
-        break
-    
-    
-    #計算履約價與合約價
-    contract_twi = api.Contracts.Indexs["001"]  # 大盤
-    snapshots_twi = api.snapshots([contract_twi])  # 取得大盤指數作為選取選擇權合約起點
-    for count in range(1, 41):
-        # 依照大盤轉換每50點間隔的履約價
-        if direction.upper() == 'BUY':
-            strikePrice = str(
-                int(snapshots_twi[0].close-snapshots_twi[0].close % 50+count*50))+'C'
-        elif direction.upper() == 'SELL':
-            strikePrice = str(
-                int(snapshots_twi[0].close-snapshots_twi[0].close % 50-(count-1)*50))+'P'
-        
-        tx = 'TX'+str(weeks) if weeks != 3 else 'TXO'  # 算出TX?
-        sym=tx+str(year)+str(month).zfill(2)+strikePrice    # 算出當前日期適合的合約symbol
-        print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym)
 
-        try:
-            # contract = api.Contracts.Options[tx][sym]  # 取得合約
-            contract=symbol2Contract(sym)
-            snapshots = api.snapshots([contract])  # 取得合約的snapshots
-            orderPrice = int(snapshots[0].close)  # 取得合約的價格
-            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym, price)
-            if orderPrice <= nDollar:  # 取得nDollar元以下最接近nDollar元的合約
-                return contract
-            tmpContract = contract
-        except:
-            pass
-         
-    contract = tmpContract  #如果沒有滿足nDollar以下的合約則以最接近的合約
-    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'tmpContract:', sym, price)
-
-    return contract
 
 # 從CSV讀入交易紀錄
 def fromCSV():
@@ -278,6 +208,10 @@ placedOrder = 0  # 一開始下單次數為零
 accountType0=''
 direction0=''
 qty0=-1
+
+# 中週期的方向初始值為無
+directionHTF='None' 
+
 #依照設定來動作
 readOrder()
 settingChange()
@@ -314,40 +248,132 @@ resDict = {
 
 # 從合約讀取選擇權形式字典
 optionDict = {'OptionRight.Call': 'Call', 'OptionRight.Put':'Put'}
-df_LTF = df0.resample(str(lowTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成小週期分K
-df_LTF.reset_index(inplace=True)
-df_HTF = df0.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成大週期分K
-df_HTF.reset_index(inplace=True)
-df0.drop(df0.index, inplace=True) #清空df0節省記憶體
 
-nextMinuteLTF = int(datetime.now().minute)  # 紀錄最新一筆分K的分鐘數進行比對
-nextMinuteHTF = datetime.now().strftime('%H:%M')  # 紀錄最新一筆分K的分鐘數進行比對
-# df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=0)
-# df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=0)
+# 重組1分線為小、中、大週期Ｋ線
+# 小週期
+df1 = df0.resample(str(timeFrame1)+'min', closed='left',label='left').agg(resDict)  
+df1.reset_index(inplace=True)
+# 中週期
+df2 = df0.resample(str(timeFrame2)+'min', closed='left',label='left').agg(resDict)  
+df2.reset_index(inplace=True)
+# 大週期
+df3 = df0.resample(str(timeFrame3)+'min', closed='left',label='left').agg(resDict)  
+df3.reset_index(inplace=True)
+# 刪除1分鐘線節省記憶體
+df0.drop(df0.index, inplace=True)
 
-data1 = []  # 紀錄tick
-df_LTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-df_LTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
-df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+# 紀錄時間的Flag確保只進行一次比對
+nextMinute1 = int(datetime.now().minute)  
+nextMinute2 = datetime.now().strftime('%H:%M')  
+nextMinute3 = datetime.now().strftime('%H:%M') 
 
-# df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=1)
-# df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=1)
 
+# 紀錄ticks
+data1 = []  
+
+# 去掉交易時間外的空行，重置index保持連續避免dataframe操作錯誤
+df1.dropna(axis=0, how='any', inplace=True)  
+df1.reset_index(drop=True)   
+df2.dropna(axis=0, how='any', inplace=True)  
+df2.reset_index(drop=True)   
+df3.dropna(axis=0, how='any', inplace=True)
+df3.reset_index(drop=True) 
+
+# 儲存df檢查正確性
+df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=1)
+df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
+df3.to_csv('/Users/apple/Documents/code/PythonX86/Output/df3.csv',index=1)
+
+# 選定選擇權合約
+def selectOption():
+    '''
+    需要把所有大盤上下10檔都snapshop出報價來選擇一定價格以下的合約
+    '''
+    global orderPrice
+    global df1
+    
+    # 計算今年每個月的結算日
+    year = datetime.now().year
+    month = datetime.now().month
+    day = datetime.now().day
+    settleDict={}   # 紀錄今年所有月份的結算日
+    sday=0  #本月第一個週三是幾日
+    for month in range(1,13):
+        weekday=dt.date(year,month,1).isoweekday()  # 計算每個月1日為週幾
+        weeks=0
+        settleDict[month]={}
+        
+        #第一個週三為幾日
+        if weekday>3:
+            sday=1+10-weekday   
+        elif weekday <=3:
+            sday=1+3-weekday
+        for n in range(0,5):
+            weeks=n+1
+            
+            if sday+n*7>calendar.monthrange(year, month)[1] :   #以每月最後一日為限計算有幾個週三
+                pass  
+            else:
+                settleDict[month][n+1]=dt.datetime(year,month,sday+n*7,8,45,0).strftime("%F %H:%M:%S")  # 紀錄每個月結算日
+                
+    for m in settleDict.keys():
+        for w in settleDict[m].keys():
+            if settleDict[m][w]>datetime.now().strftime("%F %H:%M:%S"): #比對哪個週結算日超過目前日期，此為最近的週結算日
+                month=m
+                weeks=w
+                break   # 跳出所有迴圈
+        else:
+            continue
+        break
+    
+    #計算履約價與合約價
+    contract_twi = api.Contracts.Indexs["001"]  # 大盤
+    snapshots_twi = api.snapshots([contract_twi])  # 取得大盤指數作為選取選擇權合約起點
+    print(df1.loc[df1.index[-1],'Close'],snapshots_twi[0].close)
+    for count in range(1, 41):
+        # 依照大盤轉換每50點間隔的履約價
+        if direction.upper() == 'BUY':
+            strikePrice = str(
+                int(snapshots_twi[0].close-snapshots_twi[0].close % 50+count*50))+'C'
+        elif direction.upper() == 'SELL':
+            strikePrice = str(
+                int(snapshots_twi[0].close-snapshots_twi[0].close % 50-(count-1)*50))+'P'
+        
+        tx = 'TX'+str(weeks) if weeks != 3 else 'TXO'  # 算出TX?
+        sym=tx+str(year)+str(month).zfill(2)+strikePrice    # 算出當前日期適合的合約symbol
+        print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym)
+
+        try:
+            # contract = api.Contracts.Options[tx][sym]  # 取得合約
+            contract=symbol2Contract(sym)
+            snapshots = api.snapshots([contract])  # 取得合約的snapshots
+            orderPrice = int(snapshots[0].close)  # 取得合約的價格
+            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym, price)
+            if orderPrice <= nDollar:  # 取得nDollar元以下最接近nDollar元的合約
+                return contract
+            tmpContract = contract
+        except:
+            pass
+         
+    contract = tmpContract  #如果沒有滿足nDollar以下的合約則以最接近的合約
+    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'tmpContract:', sym, price)
+
+    return contract
 
 # 接收tick報價
 @api.quote.on_quote
 def q(topic, quote):
-    global nextMinuteLTF
-    global nextMinuteHTF
-    global df_LTF
+    global nextMinute1
+    global nextMinute2
+    global df1
     global data1
     global closePrice
     global contract_txo
     global tradeRecord
-    global lowTimeFrame
+    global timeFrame1
     global openTrade
     global optionDict
+    global directionHTF
     ts = pd.Timestamp(quote['Date']+' '+quote['Time'][:8])  # 讀入Timestamp
     close = quote['Close'][0] if isinstance(
         quote['Close'], list) else quote['Close']  # 放入tick值
@@ -359,60 +385,73 @@ def q(topic, quote):
     # df1.index = df1.ts
     # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=0)
     
-    # Timestamp在lowTimeFrame或lowTimeFrame的倍數時以及收盤時進行一次tick重組分K
+    
+    
+    
+    # Timestamp在timeFrame1或timeFrame1的倍數時以及收盤時進行一次tick重組分K
     offMarket =ifOffMarket()   # 是否交易時間之外
     if not offMarket:
         data1.append([ts, close])
     # 判斷是否小週期收K線
-    if (not offMarket and ts.minute/lowTimeFrame == ts.minute//lowTimeFrame and nextMinuteLTF != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and nextMinuteLTF != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
-        nextMinuteLTF = ts.minute  # 相同的minute1分鐘內只重組一次
+    if (not offMarket and ts.minute/timeFrame1 == ts.minute//timeFrame1 and nextMinute1 != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and nextMinute1 != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
+        nextMinute1 = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
         #       'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+ts.strftime('%F %H:%M'))
-        resampleBar(lowTimeFrame, data1)  # 重組K線
+        resampleBar(timeFrame1, data1)  # 重組K線
         
         
         unixtime = time.mktime(ts.timetuple())
-        # print(unixtime/(highTimeFrame*60),unixtime//(highTimeFrame*60),datetime.now().timestamp(),unixtime,ts)
+        # print(unixtime/(timeFrame2*60),unixtime//(timeFrame2*60),datetime.now().timestamp(),unixtime,ts)
 
         # 進場訊號
-        signal = st._RSI(df_LTF)
+        signal = st._RSI(df1)
         
-        # 判斷是否大週期收K線
-        # if (int(datetime.now().timestamp())/(highTimeFrame*60) == int(datetime.now().timestamp())//(highTimeFrame*60) and nextMinuteHTF != datetime.now().strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and datetime.now().strftime('%H:%M')):
-        # if (unixtime/(highTimeFrame*60) == unixtime//(highTimeFrame*60) and nextMinuteHTF != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinuteHTF != ts.strftime('%H:%M')):
-        if (ts.minute/highTimeFrame == ts.minute//highTimeFrame and nextMinuteHTF != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinuteHTF != ts.strftime('%H:%M')):
-            # print(int(datetime.now().timestamp()/(highTimeFrame*60))-int(unixtime/(highTimeFrame*60)))
-            nextMinuteHTF = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
-            df_res=df_LTF.copy()
+        # 判斷是否中週期收K線
+        # if (int(datetime.now().timestamp())/(timeFrame2*60) == int(datetime.now().timestamp())//(timeFrame2*60) and nextMinute2 != datetime.now().strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and datetime.now().strftime('%H:%M')):
+        # if (unixtime/(timeFrame2*60) == unixtime//(timeFrame2*60) and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
+        if (ts.minute/timeFrame2 == ts.minute//timeFrame2 and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
+            # print(int(datetime.now().timestamp()/(timeFrame2*60))-int(unixtime/(timeFrame2*60)))
+            nextMinute2 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
+            df_res=df1.copy()
             df_res.ts = pd.to_datetime(df_res.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
             df_res.index = df_res.ts  # 將ts資料，設定為DataFrame的index
-            df_HTF = df_res.resample(str(highTimeFrame)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成大週期分K
-            # df_HTF.reset_index(inplace=True)
-            # df_LTF.reset_index(inplace=True)
-            df_HTF.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-            # df_HTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
-            df_HTF.reset_index(drop=True)
-            # print(df_HTF.tail(3))
-            # df_HTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_HTF.csv',index=1)
+            df2 = df_res.resample(str(timeFrame2)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成中週期分K
+            # df2.reset_index(inplace=True)
+            # df1.reset_index(inplace=True)
+            df2.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+            # df2.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+            df2.reset_index(drop=True)
+            # print(df2.tail(3))
+            # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
 
-            ifActivateBot=st._RSI_HTF(df_HTF)
+            ifActivateBot=st._RSI_HTF(df2)
             if ifActivateBot =='BUY':  #進場訊號
                 directionHTF='BUY'
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(highTimeFrame)+'m RSI low')
-                sendTelegram(str(highTimeFrame)+'m RSI low', token, chatid)
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'m RSI low')
+                sendTelegram(str(timeFrame2)+'m RSI low', token, chatid)
             elif ifActivateBot =='SELL':
                 directionHTF='SELL'
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(highTimeFrame)+'m RSI high')
-                sendTelegram(str(highTimeFrame)+'m RSI high', token, chatid) 
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'m RSI high')
+                sendTelegram(str(timeFrame2)+'m RSI high', token, chatid) 
+                
+            if (ts.minute/timeFrame3 == ts.minute//timeFrame3 and nextMinute3 != ts.strftime('%H:%M')):
+                print(timeFrame3)
             
             
         #依照設定更改動作
         readOrder()
         settingChange()
+        
+        
+        # 停損（未完工）
+        # if close<stopLossPrice:
+    
+        # 突破（未完工） 
+        # if close>breakOutPrice:
 
         # 訊號處理
         if direction=='BUY':    #buy call
-            if signal =='BUY' and directionHTF=='BUY':  #進場訊號 # 設突破單（未完工） if close>breakOutPrice:
+            if signal =='BUY' and directionHTF=='BUY':  #進場訊號 
                 if len(openTrade)==0:
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -438,7 +477,7 @@ def q(topic, quote):
                 elif len(openTrade)!=0:     #如果未平倉不為零，留作未來加碼用
                     pass
             
-            elif signal=='SELL':    #出場訊號 # 設停損單（未完工）if close<stopLossPrice:
+            elif signal=='SELL':    #出場訊號 
                 if len(openTrade)!=0:   #有部位
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -502,13 +541,13 @@ def q(topic, quote):
 
 # 重組ticks轉換5分K
 def resampleBar(period,data1):
-    global df_LTF
+    global df1
     global offMarket
-    df1 = pd.DataFrame(data1, columns=['ts', 'Close'])  #用來暫存ticks
-    df1.ts = pd.to_datetime(df1.ts)
-    df1.index = df1.ts
-    # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=0)
-    df_res = df1.Close.resample(
+    df_tick = pd.DataFrame(data1, columns=['ts', 'Close'])  #用來暫存ticks
+    df_tick.ts = pd.to_datetime(df_tick.ts)
+    df_tick.index = df_tick.ts
+    # df_tick.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_tick.csv',index=0)
+    df_res = df_tick.Close.resample(
         str(period)+'min', closed='left', label='left').agg(resDict)  # tick重組分K
     del data1[0:len(data1)-1]  # 只保留最新的一筆tick，減少記憶體佔用
     df_res.drop(df_res.index[-1], axis=0, inplace=True)  # 去掉最新的一筆分K，減少記憶體佔用
@@ -520,12 +559,12 @@ def resampleBar(period,data1):
     df_res.reset_index(inplace=True)
     df_res.dropna(axis=0, how='any', inplace=True)  # 去掉空行
     if len(df_res.ts) != 0: #當有新的重組K線時
-        while df_LTF.iloc[-1, 0] >= df_res.iloc[0, 0]:  #以新的重組K線的資料為主，刪除歷史K線最後幾筆資料
-            df_LTF.drop(df_LTF.index[-1], axis=0, inplace=True)
-    df_LTF = pd.concat([df_LTF, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
-    # print(df_LTF)
-    df_LTF.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
-    # df_LTF.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_LTF.csv',index=1)
+        while df1.iloc[-1, 0] >= df_res.iloc[0, 0]:  #以新的重組K線的資料為主，刪除歷史K線最後幾筆資料
+            df1.drop(df1.index[-1], axis=0, inplace=True)
+    df1 = pd.concat([df1, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
+    # print(df1)
+    df1.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+    df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=1)
     # df_res.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_res.csv',index=0)
     return
     
