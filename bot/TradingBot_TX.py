@@ -22,17 +22,18 @@
 刪除df0節省記憶體
 週一一早第一根K線有問題
 增加大週期：三週期
+修正大盤為期指作為履約標的
 
 [bugs]
-修正大盤為期指作為履約標的
 收盤沒有收K線
 開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看
 
 [未完工]
+停損:半價
+各個週期的賣訊作爲濾網
 在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 選擇權的報價
-停損:半價
 加碼
 觸價突破單
 三重濾網
@@ -195,7 +196,7 @@ def fromCSV():
 # 檢查是否為休市期間
 def ifOffMarket():
     # print('1',(datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45'),'2',(datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00'),'3',(datetime.now().isoweekday() in [6, 7]),'4',((datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] ))
-    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] 
+    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') <= '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <='15:00') or datetime.now().isoweekday() in [6, 7] 
         
 # 基本設定
 # 呼叫策略函式
@@ -336,21 +337,22 @@ def selectOption():
         # 依照大盤轉換每50點間隔的履約價
         if direction.upper() == 'BUY':
             strikePrice = str(
-                int(snapshots_twi[0].close-snapshots_twi[0].close % 50+count*50))+'C'
+                # int(snapshots_twi[0].close-snapshots_twi[0].close % 50+count*50))+'C'
+                int(df1.loc[df1.index[-1],'Close']-df1.loc[df1.index[-1],'Close'] % 50+count*50))+'C'
         elif direction.upper() == 'SELL':
             strikePrice = str(
-                int(snapshots_twi[0].close-snapshots_twi[0].close % 50-(count-1)*50))+'P'
+                # int(snapshots_twi[0].close-snapshots_twi[0].close % 50-(count-1)*50))+'P'
+                int(df1.loc[df1.index[-1],'Close']-df1.loc[df1.index[-1],'Close'] % 50-(count-1)*50))+'P'
         
         tx = 'TX'+str(weeks) if weeks != 3 else 'TXO'  # 算出TX?
         sym=tx+str(year)+str(month).zfill(2)+strikePrice    # 算出當前日期適合的合約symbol
-        print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym)
-
+        # print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym)
         try:
-            # contract = api.Contracts.Options[tx][sym]  # 取得合約
             contract=symbol2Contract(sym)
             snapshots = api.snapshots([contract])  # 取得合約的snapshots
             orderPrice = int(snapshots[0].close)  # 取得合約的價格
-            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym, price)
+        
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym, orderPrice)
             if orderPrice <= nDollar:  # 取得nDollar元以下最接近nDollar元的合約
                 return contract
             tmpContract = contract
