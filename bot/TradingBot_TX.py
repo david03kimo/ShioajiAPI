@@ -30,7 +30,8 @@
 
 [未完工]
 停損:半價
-各個週期的賣訊作爲濾網
+no higher high profit exit:
+各個週期的賣訊作爲濾網：各週期都OK時長單，上級OK即短單。
 在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 選擇權的報價
@@ -330,9 +331,9 @@ def selectOption():
         break
     
     #計算履約價與合約價
-    contract_twi = api.Contracts.Indexs["001"]  # 大盤
-    snapshots_twi = api.snapshots([contract_twi])  # 取得大盤指數作為選取選擇權合約起點
-    print(df1.loc[df1.index[-1],'Close'],snapshots_twi[0].close)
+    # contract_twi = api.Contracts.Indexs["001"]  # 大盤
+    # snapshots_twi = api.snapshots([contract_twi])  # 取得大盤指數作為選取選擇權合約起點
+    # print(df1.loc[df1.index[-1],'Close'],snapshots_twi[0].close)
     for count in range(1, 41):
         # 依照大盤轉換每50點間隔的履約價
         if direction.upper() == 'BUY':
@@ -487,7 +488,7 @@ def q(topic, quote):
 
         # 訊號處理
         if direction=='BUY':    #buy call
-            if signal =='BUY' and direction2=='BUY':  #進場訊號 
+            if signal =='BUY' and direction2=='BUY' and direction3=='BUY':  #進場訊號 
                 if len(openTrade)==0:
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -529,7 +530,7 @@ def q(topic, quote):
                     # tradeRecord={}  # 清空交易紀錄
                     
         elif direction=='SELL':    #buy put
-            if signal =='SELL' and direction2=='SELL':    # 設突破單（未完工） if close>breakOutPrice:
+            if signal =='SELL' and direction2=='SELL' and direction3=='SELL':    # 設突破單（未完工） if close>breakOutPrice:
                 if len(openTrade)==0:
                     contract_txo = selectOption()
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
