@@ -31,7 +31,6 @@
 [未完工]
 停損:半價
 no higher high profit exit:
-各個週期的賣訊作爲濾網：各週期都OK時長單，上級OK即短單。
 在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 選擇權的報價
@@ -197,7 +196,7 @@ def fromCSV():
 # 檢查是否為休市期間
 def ifOffMarket():
     # print('1',(datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45'),'2',(datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00'),'3',(datetime.now().isoweekday() in [6, 7]),'4',((datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] ))
-    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') <= '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <='15:00') or datetime.now().isoweekday() in [6, 7] 
+    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [6, 7] 
         
 # 基本設定
 # 呼叫策略函式
@@ -284,9 +283,9 @@ df3.dropna(axis=0, how='any', inplace=True)
 df3.reset_index(drop=True) 
 
 # 儲存df檢查正確性
-df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=1)
-df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
-df3.to_csv('/Users/apple/Documents/code/PythonX86/Output/df3.csv',index=1)
+# df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=1)
+# df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
+# df3.to_csv('/Users/apple/Documents/code/PythonX86/Output/df3.csv',index=1)
 
 # 選定選擇權合約
 def selectOption():
@@ -435,18 +434,18 @@ def q(topic, quote):
             # print(df2.tail(3))
             # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
             
-            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame2)+'K Bar:'+df2.index[-1].strftime('%F %H:%M'))
+            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame2)+'K Bar:'+df2.index[-1].strftime('%F %H:%M'))
 
 
             ifActivateBot2=st._RSI_HTF(df2)
             if ifActivateBot2 =='BUY':  #進場訊號
                 direction2='BUY'
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'m RSI low')
-                sendTelegram(str(timeFrame2)+'m RSI low', token, chatid)
+                # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'direction BUY')
+                # sendTelegram(str(timeFrame2)+'direction BUY', token, chatid)
             elif ifActivateBot2 =='SELL':
                 direction2='SELL'
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'m RSI high')
-                sendTelegram(str(timeFrame2)+'m RSI high', token, chatid) 
+                # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'m direction SELL')
+                # sendTelegram(str(timeFrame2)+'m direction SELL', token, chatid) 
                 
             if (ts.minute/timeFrame3 == ts.minute//timeFrame3 and nextMinute3 != ts.strftime('%H:%M')):
                 # print(timeFrame3)
@@ -462,22 +461,28 @@ def q(topic, quote):
                 df3.reset_index(drop=True)
                 # print(df2.tail(3))
                 # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame3)+'K Bar:'+df3.index[-1].strftime('%F %H:%M'))
+                # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame3)+'K Bar:'+df3.index[-1].strftime('%F %H:%M'))
 
                 ifActivateBot3=st._RSI_HTF(df3)
                 if ifActivateBot3 =='BUY':  #進場訊號
                     direction3='BUY'
-                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m RSI low')
-                    sendTelegram(str(timeFrame2)+'m RSI low', token, chatid)
+                    # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m direction BUY')
+                    # sendTelegram(str(timeFrame2)+'m direction BUY', token, chatid)
                 elif ifActivateBot3 =='SELL':
                     direction3='SELL'
-                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m RSI high')
-                    sendTelegram(str(timeFrame3)+'m RSI high', token, chatid) 
+                    # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m direction SELL')
+                    # sendTelegram(str(timeFrame3)+'m direction SELL', token, chatid) 
+        
+        
             
             
         #依照設定更改動作
         readOrder()
         settingChange()
+        
+        if direction==direction2 and direction2==direction3:
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction2)
+            sendTelegram('All direction: '+direction2,token,chatid)
         
         
         # 停損（未完工）
@@ -589,10 +594,10 @@ def resampleBar(period,data1):
     del data1[0:len(data1)-1]  # 只保留最新的一筆tick，減少記憶體佔用
     df_res.drop(df_res.index[-1], axis=0, inplace=True)  # 去掉最新的一筆分K，減少記憶體佔用
     # print('offMarket',offMarket)
-    try:
-        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame1)+'K Bar:'+df_res.index[-1].strftime('%F %H:%M'))
-    except:
-        pass
+    # try:
+    #     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame1)+'K Bar:'+df_res.index[-1].strftime('%F %H:%M'))
+    # except:
+    #     pass
     df_res.reset_index(inplace=True)
     df_res.dropna(axis=0, how='any', inplace=True)  # 去掉空行
     if len(df_res.ts) != 0: #當有新的重組K線時
@@ -601,7 +606,7 @@ def resampleBar(period,data1):
     df1 = pd.concat([df1, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
     # print(df1)
     df1.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
-    df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=1)
+    # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=1)
     # df_res.to_csv('/Users/apple/Documents/code/PythonX86/Output/df_res.csv',index=0)
     return
     
