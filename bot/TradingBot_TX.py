@@ -211,10 +211,6 @@ accountType0=''
 direction0=''
 qty0=-1
 
-# 中週期的方向初始值為無
-direction2='None' 
-direction3='None' 
-
 #依照設定來動作
 readOrder()
 settingChange()
@@ -287,6 +283,16 @@ df3.reset_index(drop=True)
 # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
 # df3.to_csv('/Users/apple/Documents/code/PythonX86/Output/df3.csv',index=1)
 
+
+# 檢查大週期的多空
+direction2=st._RSI_HTF(df2,timeFrame2)
+direction3=st._RSI_HTF(df3,timeFrame3)
+
+direction2_pre=direction2
+direction3_pre=direction3
+
+print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
+
 # 選定選擇權合約
 def selectOption():
     '''
@@ -294,6 +300,7 @@ def selectOption():
     '''
     global orderPrice
     global df1
+    
     
     # 計算今年每個月的結算日
     year = datetime.now().year
@@ -321,45 +328,50 @@ def selectOption():
                 
     for m in settleDict.keys():
         for w in settleDict[m].keys():
+            
+            # 今年的結算日中如果找到大於今天則跳出所有迴圈，取最接近今天的結算日
             if settleDict[m][w]>datetime.now().strftime("%F %H:%M:%S"): #比對哪個週結算日超過目前日期，此為最近的週結算日
                 month=m
                 weeks=w
-                break   # 跳出所有迴圈
+                break   
         else:
             continue
         break
     
-    #計算履約價與合約價
-    # contract_twi = api.Contracts.Indexs["001"]  # 大盤
-    # snapshots_twi = api.snapshots([contract_twi])  # 取得大盤指數作為選取選擇權合約起點
-    # print(df1.loc[df1.index[-1],'Close'],snapshots_twi[0].close)
+    #計算履約價與合約價，依照大盤期指轉換每50點間隔的履約價
     for count in range(1, 41):
-        # 依照大盤轉換每50點間隔的履約價
         if direction.upper() == 'BUY':
             strikePrice = str(
-                # int(snapshots_twi[0].close-snapshots_twi[0].close % 50+count*50))+'C'
                 int(df1.loc[df1.index[-1],'Close']-df1.loc[df1.index[-1],'Close'] % 50+count*50))+'C'
         elif direction.upper() == 'SELL':
             strikePrice = str(
-                # int(snapshots_twi[0].close-snapshots_twi[0].close % 50-(count-1)*50))+'P'
                 int(df1.loc[df1.index[-1],'Close']-df1.loc[df1.index[-1],'Close'] % 50-(count-1)*50))+'P'
         
-        tx = 'TX'+str(weeks) if weeks != 3 else 'TXO'  # 算出TX?
-        sym=tx+str(year)+str(month).zfill(2)+strikePrice    # 算出當前日期適合的合約symbol
+        # 算出TX?
+        tx = 'TX'+str(weeks) if weeks != 3 else 'TXO'  
+        
+        # 算出當前日期適合的合約symbol
+        sym=tx+str(year)+str(month).zfill(2)+strikePrice    
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym)
+        
+        
         try:
+            # 取得合約的價格
             contract=symbol2Contract(sym)
-            snapshots = api.snapshots([contract])  # 取得合約的snapshots
-            orderPrice = int(snapshots[0].close)  # 取得合約的價格
+            snapshots = api.snapshots([contract])
+            orderPrice = int(snapshots[0].close)  
         
             print(datetime.fromtimestamp(int(datetime.now().timestamp())),sym, orderPrice)
-            if orderPrice <= nDollar:  # 取得nDollar元以下最接近nDollar元的合約
+            
+            # 取得nDollar元以下最接近nDollar元的合約
+            if orderPrice <= nDollar:  
                 return contract
             tmpContract = contract
         except:
             pass
-         
-    contract = tmpContract  #如果沒有滿足nDollar以下的合約則以最接近的合約
+    
+    #如果沒有滿足nDollar以下的合約則以最接近的合約
+    contract = tmpContract  
     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'tmpContract:', sym, price)
 
     return contract
@@ -384,6 +396,8 @@ def q(topic, quote):
     global optionDict
     global direction2
     global direction3
+    global direction2_pre
+    global direction3_pre
     ts = pd.Timestamp(quote['Date']+' '+quote['Time'][:8])  # 讀入Timestamp
     close = quote['Close'][0] if isinstance(
         quote['Close'], list) else quote['Close']  # 放入tick值
@@ -437,13 +451,20 @@ def q(topic, quote):
             # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame2)+'K Bar:'+df2.index[-1].strftime('%F %H:%M'))
 
 
-            ifActivateBot2=st._RSI_HTF(df2)
-            if ifActivateBot2 =='BUY':  #進場訊號
-                direction2='BUY'
+            # ifActivateBot2=st._RSI_HTF(df2)
+            
+            # 檢查收K線之後大週期的多空
+            direction2=st._RSI_HTF(df2,timeFrame2)
+            if direction2!=direction2_pre:
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
+                direction2_pre=direction2
+
+            # if ifActivateBot2 =='BUY':  #進場訊號
+                # direction2='BUY'
                 # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'direction BUY')
                 # sendTelegram(str(timeFrame2)+'direction BUY', token, chatid)
-            elif ifActivateBot2 =='SELL':
-                direction2='SELL'
+            # elif ifActivateBot2 =='SELL':
+                # direction2='SELL'
                 # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'m direction SELL')
                 # sendTelegram(str(timeFrame2)+'m direction SELL', token, chatid) 
                 
@@ -463,13 +484,18 @@ def q(topic, quote):
                 # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
                 # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame3)+'K Bar:'+df3.index[-1].strftime('%F %H:%M'))
 
-                ifActivateBot3=st._RSI_HTF(df3)
-                if ifActivateBot3 =='BUY':  #進場訊號
-                    direction3='BUY'
+                # 檢查收K線之後大週期的多空
+                direction3=st._RSI_HTF(df3,timeFrame3)
+                if direction3!=direction3_pre:
+                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
+                    direction3_pre=direction3
+                # ifActivateBot3=st._RSI_HTF(df3)
+                # if ifActivateBot3 =='BUY':  #進場訊號
+                    # direction3='BUY'
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m direction BUY')
                     # sendTelegram(str(timeFrame2)+'m direction BUY', token, chatid)
-                elif ifActivateBot3 =='SELL':
-                    direction3='SELL'
+                # elif ifActivateBot3 =='SELL':
+                    # direction3='SELL'
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m direction SELL')
                     # sendTelegram(str(timeFrame3)+'m direction SELL', token, chatid) 
         
@@ -480,9 +506,9 @@ def q(topic, quote):
         readOrder()
         settingChange()
         
-        if direction==direction2 and direction2==direction3:
-            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction2)
-            sendTelegram('All direction: '+direction2,token,chatid)
+        # if direction==direction2 and direction2==direction3:
+        #     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction2)
+        #     sendTelegram('All direction: '+direction2,token,chatid)
         
         
         # 停損（未完工）
