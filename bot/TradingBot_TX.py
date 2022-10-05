@@ -29,6 +29,7 @@
 開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看
 
 [未完工]
+長週期指標變了telegram提醒
 停損:半價
 no higher high profit exit:
 在call-back函數之外再建立執行緒來計算
@@ -75,6 +76,9 @@ timeFrame1 = int(config.get('Trade', 'timeFrame1')) # 讀入交易設定：小�
 timeFrame2 = int(config.get('Trade', 'timeFrame2')) # 讀入交易設定：中週期K線週期
 timeFrame3 = int(config.get('Trade', 'timeFrame3')) # 讀入交易設定：中週期K線週期
 nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
+ifTF2 = bool(config.get('Trade', 'ifTF2'))   # 讀入交易設定：選擇權在多少錢以下
+ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
+
 
 # 登入帳號
 api.login(
@@ -376,6 +380,20 @@ def selectOption():
 
     return contract
 
+# 將訂閱報價合約中的code轉為symbol
+def code2symbol(code):
+    callDict={'A':'01','B':'02','C':'03','D':'04','E':'05','F':'06','G':'07','H':'08','I':'09','J':'10','K':'11','L':'12'}
+    putDict={'M':'01','N':'02','O':'03','P':'04','Q':'05','R':'06','S':'07','T':'08','U':'09','V':'10','W':'11','X':'12'}
+    if code[8] in callDict:
+        sym=code[:3]+str(2020+int(code[-1]))+callDict[code[8]]+code[3:8]+'C'
+    elif code[8] in putDict:
+        sym=code[:3]+str(2020+int(code[-1]))+putDict[code[8]]+code[3:8]+'P'
+    else:
+        print('error code')
+    return sym
+
+
+
 # 接收tick報價
 @api.quote.on_quote
 def q(topic, quote):
@@ -398,6 +416,9 @@ def q(topic, quote):
     global direction3
     global direction2_pre
     global direction3_pre
+    global ifTF2
+    global ifTF3
+    
     ts = pd.Timestamp(quote['Date']+' '+quote['Time'][:8])  # 讀入Timestamp
     close = quote['Close'][0] if isinstance(
         quote['Close'], list) else quote['Close']  # 放入tick值
@@ -433,7 +454,7 @@ def q(topic, quote):
         # 判斷是否中週期收K線
         # if (int(datetime.now().timestamp())/(timeFrame2*60) == int(datetime.now().timestamp())//(timeFrame2*60) and nextMinute2 != datetime.now().strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and datetime.now().strftime('%H:%M')):
         # if (unixtime/(timeFrame2*60) == unixtime//(timeFrame2*60) and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
-        if (ts.minute/timeFrame2 == ts.minute//timeFrame2 and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
+        if (ts.minute/timeFrame2 == ts.minute//timeFrame2 and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')) and ifTF2:
             # print(int(datetime.now().timestamp()/(timeFrame2*60))-int(unixtime/(timeFrame2*60)))
             nextMinute2 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
             df_res2=df1.copy()
@@ -468,7 +489,7 @@ def q(topic, quote):
                 # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'m direction SELL')
                 # sendTelegram(str(timeFrame2)+'m direction SELL', token, chatid) 
                 
-            if (ts.minute/timeFrame3 == ts.minute//timeFrame3 and nextMinute3 != ts.strftime('%H:%M')):
+            if (ts.minute/timeFrame3 == ts.minute//timeFrame3 and nextMinute3 != ts.strftime('%H:%M')) and ifTF3:
                 # print(timeFrame3)
                 nextMinute3 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
                 df_res3=df1.copy()
@@ -498,9 +519,16 @@ def q(topic, quote):
                     # direction3='SELL'
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m direction SELL')
                     # sendTelegram(str(timeFrame3)+'m direction SELL', token, chatid) 
+            # 濾網開關
+            elif ifTF3==False:
+                direction3_pre=direction
+                direction3=direction
         
+        # 濾網開關
+        elif ifTF2==False:
+            direction2_pre=direction
+            direction2=direction
         
-            
             
         #依照設定更改動作
         readOrder()
@@ -511,14 +539,22 @@ def q(topic, quote):
         #     sendTelegram('All direction: '+direction2,token,chatid)
         
         
-        # 停損（未完工）
-        # if close<stopLossPrice:
+        
+        
     
         # 突破（未完工） 
         # if close>breakOutPrice:
-
-        # 訊號處理
-        if direction=='BUY':    #buy call
+        
+        # Buy call訊號處理
+        if direction=='BUY':  
+            
+            
+            # 停損（未完工）
+            # if close<stopLossPrice:
+            
+            
+              
+            
             if signal =='BUY' and direction2=='BUY' and direction3=='BUY':  #進場訊號 
                 if len(openTrade)==0:
                     contract_txo = selectOption()   #選擇選擇權合約
@@ -542,6 +578,10 @@ def q(topic, quote):
                     openTrade.append(list(tradeRecord.keys())[-1])
                     # 寫入csv
                     toCSV(tradeRecord,openTrade)
+                    
+                    # 訂閱選擇權合約ticks報價
+                    # api.quote.subscribe(contract_txo)                      
+                    
                 elif len(openTrade)!=0:     #如果未平倉不為零，留作未來加碼用
                     pass
             
