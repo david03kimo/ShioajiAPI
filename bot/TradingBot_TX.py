@@ -477,8 +477,11 @@ def q(topic, quote):
             # 檢查收K線之後大週期的多空
             direction2=st._RSI_HTF(df2,timeFrame2)
             if direction2!=direction2_pre:
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'['+str(timeFrame2)+']',direction2,timeFrame3,direction3)
                 direction2_pre=direction2
+                if direction==direction2 and direction2==direction3:
+                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
+                    sendTelegram('All direction: '+direction,token,chatid)
 
             # if ifActivateBot2 =='BUY':  #進場訊號
                 # direction2='BUY'
@@ -502,14 +505,17 @@ def q(topic, quote):
                 # df2.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
                 df3.reset_index(drop=True)
                 # print(df2.tail(3))
-                # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
+                # df3.to_csv('/Users/apple/Documents/code/PythonX86/Output/df3.csv',index=1)
                 # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame3)+'K Bar:'+df3.index[-1].strftime('%F %H:%M'))
 
                 # 檢查收K線之後大週期的多空
                 direction3=st._RSI_HTF(df3,timeFrame3)
                 if direction3!=direction3_pre:
-                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
+                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,'['+str(timeFrame3)+']',direction3)
                     direction3_pre=direction3
+                    if direction==direction2 and direction2==direction3:
+                        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
+                        sendTelegram('All direction: '+direction,token,chatid)
                 # ifActivateBot3=st._RSI_HTF(df3)
                 # if ifActivateBot3 =='BUY':  #進場訊號
                     # direction3='BUY'
@@ -534,9 +540,7 @@ def q(topic, quote):
         readOrder()
         settingChange()
         
-        # if direction==direction2 and direction2==direction3:
-        #     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction2)
-        #     sendTelegram('All direction: '+direction2,token,chatid)
+        
         
         
         
