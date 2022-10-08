@@ -23,15 +23,16 @@
 週一一早第一根K線有問題
 增加大週期：三週期
 修正大盤為期指作為履約標的
+長週期指標變了telegram提醒
+增加是否自動出場開關
 
 [bugs]
 收盤沒有收K線
 開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看
+增加選擇幾個週期濾網
 
 [未完工]
-長週期指標變了telegram提醒
 停損:半價
-no higher high profit exit:
 在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 選擇權的報價
@@ -78,6 +79,7 @@ timeFrame3 = int(config.get('Trade', 'timeFrame3')) # 讀入交易設定：中�
 nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
 ifTF2 = bool(config.get('Trade', 'ifTF2'))   # 讀入交易設定：選擇權在多少錢以下
 ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
+ifAutoExit = bool(config.get('Trade', 'ifAutoExit'))   # 讀入交易設定：選擇權在多少錢以下
 
 
 # 登入帳號
@@ -549,6 +551,7 @@ def q(topic, quote):
         # 突破（未完工） 
         # if close>breakOutPrice:
         
+        # print(direction2,direction3)
         # Buy call訊號處理
         if direction=='BUY':  
             
@@ -589,7 +592,7 @@ def q(topic, quote):
                 elif len(openTrade)!=0:     #如果未平倉不為零，留作未來加碼用
                     pass
             
-            elif signal=='SELL':    #出場訊號 
+            elif signal=='SELL' and ifAutoExit:    #出場訊號 
                 if len(openTrade)!=0:   #有部位
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -628,7 +631,7 @@ def q(topic, quote):
                 elif len(openTrade)!=0:
                     pass
                 
-            elif signal=='BUY': # 設停損單（未完工）if close<stopLossPrice:
+            elif signal=='BUY' and ifAutoExit: # 設停損單（未完工）if close<stopLossPrice:
                 if len(openTrade)!=0:
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol'])
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
