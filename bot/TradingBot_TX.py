@@ -32,18 +32,21 @@
 增加選擇幾個週期濾網
 
 [未完工]
-停損:半價
+實際交易
 在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 選擇權的報價
+停損:半價
 加碼
 觸價突破單
 三重濾網
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
+接上callback 函數作為回測
 即時回測
 tradingview來啟動 to IB&SinoPac API.
 周選合約裡面找划算的
-交易股票期貨
+交易股票期貨、選擇權
+交易ETF
 
 '''
 import sys
@@ -73,14 +76,29 @@ PI = str(config.get('Login', 'PersonalId'))
 PWD = str(config.get('Login', 'PassWord'))
 CAPath = str(config.get('Login', 'CAPath'))
 CAPWD = str(config.get('Login', 'CAPassWord'))
-timeFrame1 = int(config.get('Trade', 'timeFrame1')) # 讀入交易設定：小週期K線週期
-timeFrame2 = int(config.get('Trade', 'timeFrame2')) # 讀入交易設定：中週期K線週期
-timeFrame3 = int(config.get('Trade', 'timeFrame3')) # 讀入交易設定：中週期K線週期
+try:
+    timeFrame1 = int(config.get('Trade', 'timeFrame1')) # 讀入交易設定：小週期K線週期
+except:
+    pass
+try:
+    # timeFrame2 = int(config.get('Trade', 'timeFrame2')) # 讀入交易設定：中週期K線週期
+    timeFrame2 = config.get('Trade', 'timeFrame2') # 讀入交易設定：中週期K線週期
+except:
+    pass
+try:
+    # timeFrame3 = int(config.get('Trade', 'timeFrame3')) # 讀入交易設定：中週期K線週期
+    timeFrame3 = config.get('Trade', 'timeFrame3') # 讀入交易設定：中週期K線週期
+except:
+    pass
+
 nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
-ifTF2 = bool(config.get('Trade', 'ifTF2'))   # 讀入交易設定：選擇權在多少錢以下
-ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
+# ifTF2 = bool(config.get('Trade', 'ifTF2'))   # 讀入交易設定：選擇權在多少錢以下
+# ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
 ifAutoExit = bool(config.get('Trade', 'ifAutoExit'))   # 讀入交易設定：選擇權在多少錢以下
 
+ifTF2=True if timeFrame2.isdigit() else False
+ifTF3=True if timeFrame3.isdigit() else False
+ifTF3=False if not ifTF2 else ifTF3
 
 # 登入帳號
 api.login(
@@ -291,13 +309,15 @@ df3.reset_index(drop=True)
 
 
 # 檢查大週期的多空
-direction2=st._RSI_HTF(df2,timeFrame2)
-direction3=st._RSI_HTF(df3,timeFrame3)
+if ifTF2:
+    direction2=st._RSI_HTF(df2,timeFrame2)
+    direction2_pre=direction2
+    print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2)
+if ifTF3:
+    direction3=st._RSI_HTF(df3,timeFrame3)
+    direction3_pre=direction3
+    print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
 
-direction2_pre=direction2
-direction3_pre=direction3
-
-print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
 
 # 選定選擇權合約
 def selectOption():
@@ -386,9 +406,9 @@ def selectOption():
 def code2symbol(code):
     callDict={'A':'01','B':'02','C':'03','D':'04','E':'05','F':'06','G':'07','H':'08','I':'09','J':'10','K':'11','L':'12'}
     putDict={'M':'01','N':'02','O':'03','P':'04','Q':'05','R':'06','S':'07','T':'08','U':'09','V':'10','W':'11','X':'12'}
-    if code[8] in callDict:
+    if code[8] in callDict.keys():
         sym=code[:3]+str(2020+int(code[-1]))+callDict[code[8]]+code[3:8]+'C'
-    elif code[8] in putDict:
+    elif code[8] in putDict.keys():
         sym=code[:3]+str(2020+int(code[-1]))+putDict[code[8]]+code[3:8]+'P'
     else:
         print('error code')
@@ -454,9 +474,7 @@ def q(topic, quote):
         signal = st._RSI(df1)
         
         # 判斷是否中週期收K線
-        # if (int(datetime.now().timestamp())/(timeFrame2*60) == int(datetime.now().timestamp())//(timeFrame2*60) and nextMinute2 != datetime.now().strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and datetime.now().strftime('%H:%M')):
-        # if (unixtime/(timeFrame2*60) == unixtime//(timeFrame2*60) and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
-        if (ts.minute/timeFrame2 == ts.minute//timeFrame2 and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')) and ifTF2:
+        if (ts.minute/timeFrame2 == ts.minute//timeFrame2 and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
             # print(int(datetime.now().timestamp()/(timeFrame2*60))-int(unixtime/(timeFrame2*60)))
             nextMinute2 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
             df_res2=df1.copy()
@@ -473,28 +491,25 @@ def q(topic, quote):
             
             # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame2)+'K Bar:'+df2.index[-1].strftime('%F %H:%M'))
 
-
-            # ifActivateBot2=st._RSI_HTF(df2)
             
             # 檢查收K線之後大週期的多空
-            direction2=st._RSI_HTF(df2,timeFrame2)
-            if direction2!=direction2_pre:
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'['+str(timeFrame2)+']',direction2,timeFrame3,direction3)
-                direction2_pre=direction2
-                if direction==direction2 and direction2==direction3:
-                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
-                    sendTelegram('All direction: '+direction,token,chatid)
+            if ifTF2:
+                direction2=st._RSI_HTF(df2,timeFrame2)
+                if direction2!=direction2_pre:
+                    if ifTF3:
+                        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'['+str(timeFrame2)+']',direction2,timeFrame3,direction3)
+                        if direction==direction2 and direction2==direction3:
+                            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
+                            sendTelegram('All direction: '+direction,token,chatid)
+                    else:
+                        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'['+str(timeFrame2)+']',direction2)
+                        if direction==direction2:
+                            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
+                            sendTelegram('All direction: '+direction,token,chatid)
 
-            # if ifActivateBot2 =='BUY':  #進場訊號
-                # direction2='BUY'
-                # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'direction BUY')
-                # sendTelegram(str(timeFrame2)+'direction BUY', token, chatid)
-            # elif ifActivateBot2 =='SELL':
-                # direction2='SELL'
-                # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame2)+'m direction SELL')
-                # sendTelegram(str(timeFrame2)+'m direction SELL', token, chatid) 
-                
-            if (ts.minute/timeFrame3 == ts.minute//timeFrame3 and nextMinute3 != ts.strftime('%H:%M')) and ifTF3:
+                    direction2_pre=direction2
+
+            if (ts.minute/timeFrame3 == ts.minute//timeFrame3 and nextMinute3 != ts.strftime('%H:%M')):
                 # print(timeFrame3)
                 nextMinute3 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
                 df_res3=df1.copy()
@@ -511,22 +526,15 @@ def q(topic, quote):
                 # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame3)+'K Bar:'+df3.index[-1].strftime('%F %H:%M'))
 
                 # 檢查收K線之後大週期的多空
-                direction3=st._RSI_HTF(df3,timeFrame3)
-                if direction3!=direction3_pre:
-                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,'['+str(timeFrame3)+']',direction3)
-                    direction3_pre=direction3
-                    if direction==direction2 and direction2==direction3:
-                        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
-                        sendTelegram('All direction: '+direction,token,chatid)
-                # ifActivateBot3=st._RSI_HTF(df3)
-                # if ifActivateBot3 =='BUY':  #進場訊號
-                    # direction3='BUY'
-                    # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m direction BUY')
-                    # sendTelegram(str(timeFrame2)+'m direction BUY', token, chatid)
-                # elif ifActivateBot3 =='SELL':
-                    # direction3='SELL'
-                    # print(datetime.fromtimestamp(int(datetime.now().timestamp())),str(timeFrame3)+'m direction SELL')
-                    # sendTelegram(str(timeFrame3)+'m direction SELL', token, chatid) 
+                if ifTF3:
+                    direction3=st._RSI_HTF(df3,timeFrame3)
+                    if direction3!=direction3_pre:
+                        print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,'['+str(timeFrame3)+']',direction3)
+                        sendTelegram(str(timeFrame3)+' min '+direction3,token,chatid)
+                        direction3_pre=direction3
+                        if direction==direction2 and direction2==direction3:
+                            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
+                            sendTelegram('All direction: '+direction,token,chatid)
             # 濾網開關
             elif ifTF3==False:
                 direction3_pre=direction
