@@ -25,11 +25,12 @@
 修正大盤為期指作為履約標的
 長週期指標變了telegram提醒
 增加是否自動出場開關
+增加選擇幾個週期濾網
 
 [bugs]
-收盤沒有收K線
+前一天假日沒資料：檢測前一天日期是否存在，如果沒有就一直到有日期的那天抓資料。
 開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看
-增加選擇幾個週期濾網
+收盤沒有收K線
 
 [未完工]
 實際交易
@@ -441,6 +442,9 @@ def q(topic, quote):
     global ifTF2
     global ifTF3
     
+    conditionBuy=False
+    conditionSell=False
+    
     ts = pd.Timestamp(quote['Date']+' '+quote['Time'][:8])  # 讀入Timestamp
     close = quote['Close'][0] if isinstance(
         quote['Close'], list) else quote['Close']  # 放入tick值
@@ -474,26 +478,26 @@ def q(topic, quote):
         signal = st._RSI(df1)
         
         # 判斷是否中週期收K線
-        if (ts.minute/timeFrame2 == ts.minute//timeFrame2 and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
-            # print(int(datetime.now().timestamp()/(timeFrame2*60))-int(unixtime/(timeFrame2*60)))
-            nextMinute2 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
-            df_res2=df1.copy()
-            df_res2.ts = pd.to_datetime(df_res2.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
-            df_res2.index = df_res2.ts  # 將ts資料，設定為DataFrame的index
-            df2 = df_res2.resample(str(timeFrame2)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成中週期分K
-            # df2.reset_index(inplace=True)
-            # df1.reset_index(inplace=True)
-            df2.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-            # df2.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
-            df2.reset_index(drop=True)
-            # print(df2.tail(3))
-            # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
-            
-            # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame2)+'K Bar:'+df2.index[-1].strftime('%F %H:%M'))
+        if ifTF2:
+            if (ts.minute/int(timeFrame2) == ts.minute//int(timeFrame2) and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
+                # print(int(datetime.now().timestamp()/(timeFrame2*60))-int(unixtime/(timeFrame2*60)))
+                nextMinute2 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
+                df_res2=df1.copy()
+                df_res2.ts = pd.to_datetime(df_res2.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
+                df_res2.index = df_res2.ts  # 將ts資料，設定為DataFrame的index
+                df2 = df_res2.resample(str(timeFrame2)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成中週期分K
+                # df2.reset_index(inplace=True)
+                # df1.reset_index(inplace=True)
+                df2.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+                # df2.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+                df2.reset_index(drop=True)
+                # print(df2.tail(3))
+                # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
+                
+                # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame2)+'K Bar:'+df2.index[-1].strftime('%F %H:%M'))
 
-            
-            # 檢查收K線之後大週期的多空
-            if ifTF2:
+                
+                # 檢查收K線之後大週期的多空
                 direction2=st._RSI_HTF(df2,timeFrame2)
                 if direction2!=direction2_pre:
                     if ifTF3:
@@ -506,56 +510,59 @@ def q(topic, quote):
                         if direction==direction2:
                             print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
                             sendTelegram('All direction: '+direction,token,chatid)
-
                     direction2_pre=direction2
-
-            if (ts.minute/timeFrame3 == ts.minute//timeFrame3 and nextMinute3 != ts.strftime('%H:%M')):
-                # print(timeFrame3)
-                nextMinute3 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
-                df_res3=df1.copy()
-                df_res3.ts = pd.to_datetime(df_res3.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
-                df_res3.index = df_res3.ts  # 將ts資料，設定為DataFrame的index
-                df3 = df_res3.resample(str(timeFrame3)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成中週期分K
-                # df2.reset_index(inplace=True)
-                # df1.reset_index(inplace=True)
-                df3.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
-                # df2.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
-                df3.reset_index(drop=True)
-                # print(df2.tail(3))
-                # df3.to_csv('/Users/apple/Documents/code/PythonX86/Output/df3.csv',index=1)
-                # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame3)+'K Bar:'+df3.index[-1].strftime('%F %H:%M'))
-
-                # 檢查收K線之後大週期的多空
+                
+                # 判斷是否大週期收K線
                 if ifTF3:
-                    direction3=st._RSI_HTF(df3,timeFrame3)
-                    if direction3!=direction3_pre:
-                        print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,'['+str(timeFrame3)+']',direction3)
-                        sendTelegram(str(timeFrame3)+' min '+direction3,token,chatid)
-                        direction3_pre=direction3
-                        if direction==direction2 and direction2==direction3:
-                            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
-                            sendTelegram('All direction: '+direction,token,chatid)
+                    if (ts.minute/int(timeFrame3) == ts.minute//int(timeFrame3) and nextMinute3 != ts.strftime('%H:%M')):
+                        # print(timeFrame3)
+                        nextMinute3 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
+                        df_res3=df1.copy()
+                        df_res3.ts = pd.to_datetime(df_res3.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
+                        df_res3.index = df_res3.ts  # 將ts資料，設定為DataFrame的index
+                        df3 = df_res3.resample(str(timeFrame3)+'min', closed='left',label='left').agg(resDict)  # 將1分K重組成中週期分K
+                        # df2.reset_index(inplace=True)
+                        # df1.reset_index(inplace=True)
+                        df3.dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+                        # df2.reset_index(drop=True)   # 重置index保持連續避免dataframe操作錯誤
+                        df3.reset_index(drop=True)
+                        # print(df2.tail(3))
+                        # df3.to_csv('/Users/apple/Documents/code/PythonX86/Output/df3.csv',index=1)
+                        # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame3)+'K Bar:'+df3.index[-1].strftime('%F %H:%M'))
+
+                        # 檢查收K線之後大週期的多空
+                        
+                        direction3=st._RSI_HTF(df3,timeFrame3)
+                        conditionBuy=signal =='BUY' and direction2=='BUY' and direction3=='BUY'
+                        conditionSell=signal =='SELL' and direction2=='SELL' and direction3=='SELL'
+                        
+                        if direction3!=direction3_pre:
+                            print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,'['+str(timeFrame3)+']',direction3)
+                            sendTelegram(str(timeFrame3)+' min '+direction3,token,chatid)
+                            direction3_pre=direction3
+                            if direction==direction2 and direction2==direction3:
+                                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
+                                sendTelegram('All direction: '+direction,token,chatid)  
+                             
+                else:
+                    conditionBuy=signal =='BUY' and direction2=='BUY' 
+                    conditionSell=signal =='SELL' and direction2=='SELL'
+                    
+            
             # 濾網開關
-            elif ifTF3==False:
-                direction3_pre=direction
-                direction3=direction
+            elif ifTF2==False:
+                direction2_pre=direction
+                direction2=direction
         
-        # 濾網開關
-        elif ifTF2==False:
-            direction2_pre=direction
-            direction2=direction
+        else:
+            conditionBuy=signal =='BUY'
+            conditionSell=signal =='SELL'
         
             
         #依照設定更改動作
         readOrder()
         settingChange()
         
-        
-        
-        
-        
-        
-    
         # 突破（未完工） 
         # if close>breakOutPrice:
         
@@ -567,10 +574,9 @@ def q(topic, quote):
             # 停損（未完工）
             # if close<stopLossPrice:
             
-            
-              
-            
-            if signal =='BUY' and direction2=='BUY' and direction3=='BUY':  #進場訊號 
+    
+            # if signal =='BUY' and direction2=='BUY' and direction3=='BUY':  #進場訊號 
+            if conditionBuy:  #進場訊號 
                 if len(openTrade)==0:
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -616,7 +622,8 @@ def q(topic, quote):
                     # tradeRecord={}  # 清空交易紀錄
                     
         elif direction=='SELL':    #buy put
-            if signal =='SELL' and direction2=='SELL' and direction3=='SELL':    # 設突破單（未完工） if close>breakOutPrice:
+            # if signal =='SELL' and direction2=='SELL' and direction3=='SELL':    # 設突破單（未完工） if close>breakOutPrice:
+            if conditionSell:    # 設突破單（未完工） if close>breakOutPrice:
                 if len(openTrade)==0:
                     contract_txo = selectOption()
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -675,13 +682,13 @@ def resampleBar(period,data1):
     del data1[0:len(data1)-1]  # 只保留最新的一筆tick，減少記憶體佔用
     df_res.drop(df_res.index[-1], axis=0, inplace=True)  # 去掉最新的一筆分K，減少記憶體佔用
     # print('offMarket',offMarket)
-    # try:
-    #     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame1)+'K Bar:'+df_res.index[-1].strftime('%F %H:%M'))
-    # except:
-    #     pass
+    try:
+        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Market:Closed.' if offMarket else 'Market:Opened',str(timeFrame1)+'K Bar:'+df_res.index[-1].strftime('%F %H:%M'))
+    except:
+        pass
     df_res.reset_index(inplace=True)
     df_res.dropna(axis=0, how='any', inplace=True)  # 去掉空行
-    if len(df_res.ts) != 0: #當有新的重組K線時
+    if len(df_res.ts) != 0 and len(df1.ts) != 0: #當有新的重組K線時
         while df1.iloc[-1, 0] >= df_res.iloc[0, 0]:  #以新的重組K線的資料為主，刪除歷史K線最後幾筆資料
             df1.drop(df1.index[-1], axis=0, inplace=True)
     df1 = pd.concat([df1, df_res], ignore_index=True)  # 重組後分K加入原來歷史分K
