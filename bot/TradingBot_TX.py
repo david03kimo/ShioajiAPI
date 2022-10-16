@@ -26,16 +26,17 @@
 長週期指標變了telegram提醒
 增加是否自動出場開關
 增加選擇幾個週期濾網
+開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看:2022-10-12 08:45:00 Market:Opened 3K Bar:2022-10-12 08:42
+收盤沒有收K線
 
 [bugs]
 前一天假日沒資料：檢測前一天日期是否存在，如果沒有就一直到有日期的那天抓資料。
-開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看
-收盤沒有收K線
 
 [未完工]
 實際交易
-在call-back函數之外再建立執行緒來計算
 處理OrderState，Live從API回報了解庫存，未成交單子處理
+在call-back函數之外再建立執行緒來計算
+
 選擇權的報價
 停損:半價
 加碼
@@ -70,36 +71,79 @@ import math
 # 建立 Shioaji api 物件
 api = sj.Shioaji()
 
+def readConfig():
+    global config
+    global PI
+    global PWD
+    global CAPath
+    global CAPWD
+    global timeFrame1
+    global timeFrame2
+    global timeFrame3
+    global nDollar
+    global ifTF2
+    global ifTF3
+    global ifAutoExit
+    global timeFrame1Pre
+    global timeFrame2Pre
+    global timeFrame3Pre
+    global nDollarPre
+    global ifAutoExitPre
+    
+    config = configparser.ConfigParser()
+    config.read('/Users/apple/Documents/code/PythonX86/Settings/config.cfg')  # 讀入個人資料
+    PI = str(config.get('Login', 'PersonalId'))
+    PWD = str(config.get('Login', 'PassWord'))
+    CAPath = str(config.get('Login', 'CAPath'))
+    CAPWD = str(config.get('Login', 'CAPassWord'))
+    try:
+        timeFrame1 = int(config.get('Trade', 'timeFrame1')) # 讀入交易設定：小週期K線週期
+    except:
+        pass
+    try:
+        # timeFrame2 = int(config.get('Trade', 'timeFrame2')) # 讀入交易設定：中週期K線週期
+        timeFrame2 = config.get('Trade', 'timeFrame2') # 讀入交易設定：中週期K線週期
+    except:
+        pass
+    try:
+        # timeFrame3 = int(config.get('Trade', 'timeFrame3')) # 讀入交易設定：中週期K線週期
+        timeFrame3 = config.get('Trade', 'timeFrame3') # 讀入交易設定：中週期K線週期
+    except:
+        pass
+
+    nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
+    # ifTF2 = bool(config.get('Trade', 'ifTF2'))   # 讀入交易設定：選擇權在多少錢以下
+    # ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
+    ifAutoExit = bool(config.get('Trade', 'ifAutoExit'))   # 讀入交易設定：選擇權在多少錢以下
+
+    ifTF2=True if timeFrame2.isdigit() else False
+    ifTF3=True if timeFrame3.isdigit() else False
+    ifTF3=False if not ifTF2 else ifTF3
+    
+    # 記錄原值做比較是否改變，有則提醒
+    timeFrame1Pre=timeFrame1
+    timeFrame2Pre=timeFrame2
+    timeFrame3Pre=timeFrame3
+    nDollarPre=nDollar
+    ifAutoExitPre=ifAutoExit
+    
+    return
+
+
+def readTelegram():
+    global config
+    global token
+    global chatid
+    
+    config.read(
+    '/Users/apple/Documents/code/PythonX86/Settings/TelegramConfig.cfg')
+    token = config.get('Section_A', 'token')
+    chatid = config.get('Section_A', 'chatid')
+    return
+
+
 # 讀取config
-config = configparser.ConfigParser()
-config.read('/Users/apple/Documents/code/PythonX86/Output/config.cfg')  # 讀入個人資料
-PI = str(config.get('Login', 'PersonalId'))
-PWD = str(config.get('Login', 'PassWord'))
-CAPath = str(config.get('Login', 'CAPath'))
-CAPWD = str(config.get('Login', 'CAPassWord'))
-try:
-    timeFrame1 = int(config.get('Trade', 'timeFrame1')) # 讀入交易設定：小週期K線週期
-except:
-    pass
-try:
-    # timeFrame2 = int(config.get('Trade', 'timeFrame2')) # 讀入交易設定：中週期K線週期
-    timeFrame2 = config.get('Trade', 'timeFrame2') # 讀入交易設定：中週期K線週期
-except:
-    pass
-try:
-    # timeFrame3 = int(config.get('Trade', 'timeFrame3')) # 讀入交易設定：中週期K線週期
-    timeFrame3 = config.get('Trade', 'timeFrame3') # 讀入交易設定：中週期K線週期
-except:
-    pass
-
-nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
-# ifTF2 = bool(config.get('Trade', 'ifTF2'))   # 讀入交易設定：選擇權在多少錢以下
-# ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
-ifAutoExit = bool(config.get('Trade', 'ifAutoExit'))   # 讀入交易設定：選擇權在多少錢以下
-
-ifTF2=True if timeFrame2.isdigit() else False
-ifTF3=True if timeFrame3.isdigit() else False
-ifTF3=False if not ifTF2 else ifTF3
+readConfig()
 
 # 登入帳號
 api.login(
@@ -117,20 +161,20 @@ api.activate_ca(
 )
 
 # 讀入telegram資料
-config.read(
-    '/Users/apple/Documents/code/Python/IB-native-API/Output/telegramConfig.cfg')
-token = config.get('Section_A', 'token')
-chatid = config.get('Section_A', 'chatid')
+readTelegram()
 
 # 訂單設定
 def readOrder():
     global direction
     global accountType
     global qty
+    global directionPre
+    global accountTypePre
+    global qtyPre
     global orderCount
     # 讀入訂單設定檔
     df_order = pd.read_csv(
-        '/Users/apple/Documents/code/PythonX86/Output/order.csv',index_col=False)
+        '//Users/apple/Documents/code/PythonX86/Settings/order.csv',index_col=False)
     df_order = df_order.values.tolist()
     a = df_order[0][0].split()
     orderCount=int(a[0])    #下單的次數限制
@@ -146,8 +190,15 @@ def readOrder():
         qty = 1
     else:
         accountType = 'LIVE'    #實盤操作
+        
+    # 記錄原值做比較是否改變，有則提醒
+    accountTypePre=accountType
+    directionPre=direction
+    qtyPre=qty
+    
 
     return
+
 
 # 發送訊息到Telegram函式
 def sendTelegram(text, token, chatid):
@@ -160,19 +211,52 @@ def sendTelegram(text, token, chatid):
 
 # 通知下單設定改變
 def settingChange():
-    global accountType0
-    global direction0
-    global qty0
-    if (qty0!=qty) or (direction0!=direction) or (accountType0!=accountType):
+    global direction
+    global accountType
+    global qty
+    global directionPre
+    global accountTypePre
+    global qtyPre
+    global timeFrame1
+    global timeFrame2
+    global timeFrame3
+    global nDollar
+    global ifAutoExit
+    global timeFrame1Pre
+    global timeFrame2Pre
+    global timeFrame3Pre
+    global nDollarPre
+    global ifAutoExitPre
+    
+    if (qtyPre!=qty) or (directionPre!=direction) or (accountTypePre!=accountType):
         print('Setting:',accountType,'account',direction,qty)
         sendTelegram('Setting:'+accountType+' account '+direction+' '+str(qty), token, chatid)
-        accountType0=accountType
-        qty0=qty
-        direction0=direction
+        accountTypePre=accountType
+        qtyPre=qty
+        directionPre=direction
+        
+    if (timeFrame1!=timeFrame1Pre) or (timeFrame2!=timeFrame2Pre) or (timeFrame3!=timeFrame3Pre) :
+        print('Time Frame change',timeFrame1,timeFrame2,timeFrame3)
+        sendTelegram('Time Frame change:'+str(timeFrame1)+' '+str(timeFrame2)+' '+str(timeFrame3), token, chatid) 
+        timeFrame1Pre=timeFrame1   
+        timeFrame2Pre=timeFrame2   
+        timeFrame3Pre=timeFrame3   
+    
+    if (nDollar!=nDollarPre): 
+        print('Contract blew ',nDollar)
+        sendTelegram('Contract blew '+str(nDollar), token, chatid)  
+        nDollarPre=nDollar   
+    
+    if (ifAutoExit!=ifAutoExitPre):
+        print('Auto Exit is',ifAutoExit)
+        sendTelegram('Auto Exit is  '+str(ifAutoExit), token, chatid)  
+        ifAutoExitPre=ifAutoExit
+        
     return
 
 # 根據當前日期選擇近月合約：結算日則以次月合約
 def selectFutures():
+    global futureSymbol
     year = datetime.now().year  # 今年
     month =datetime.now().month  # 這個月
     day=21-(dt.date(year,month,1).weekday()+4)%7         #   weekday函數 禮拜一為0;禮拜日為6
@@ -181,11 +265,10 @@ def selectFutures():
         month=month+1
         day=21-(dt.date(year,month,1).weekday()+4)%7 
    
-    sym='TXF'+str(year)+str(month).zfill(2) #zfill(2)保持月份是兩位數
-    print(sym,'Settlement date is',dt.date(year,month,day))
-    contract=api.Contracts.Futures['TXF'][sym]
+    futureSymbol='TXF'+str(year)+str(month).zfill(2) #zfill(2)保持月份是兩位數
+    print(futureSymbol,'Settlement date is',dt.date(year,month,day))
+    contract=api.Contracts.Futures['TXF'][futureSymbol]
     return contract
-
 
 
 # 從CSV讀入交易紀錄
@@ -221,8 +304,19 @@ def fromCSV():
 # 檢查是否為休市期間
 def ifOffMarket():
     # print('1',(datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45'),'2',(datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00'),'3',(datetime.now().isoweekday() in [6, 7]),'4',((datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] ))
-    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [6, 7] 
-        
+    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [6, 7]   
+
+# 交易回報
+def place_cb(stat, msg):
+    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'__my_place_callback__')
+    print(datetime.fromtimestamp(int(datetime.now().timestamp())),stat, msg)
+    if stat['operation']['op_code']!='00':
+        print(stat['operation']['op_code'])
+        sendTelegram(stat['operation']['op_code'], token, chatid)  
+    if stat['operation']['op_type']=='New':
+            
+    return
+
 # 基本設定
 # 呼叫策略函式
 StrategyType = 'API'  # 告訴策略用API方式來處理訊號
@@ -231,10 +325,6 @@ rm = RiskManage(StrategyType, 2)    # 風控函式
 
 offMarket =ifOffMarket()   # 是否交易時間之外
 placedOrder = 0  # 一開始下單次數為零
-# 紀錄來與新的紀錄比對
-accountType0=''
-direction0=''
-qty0=-1
 
 #依照設定來動作
 readOrder()
@@ -253,7 +343,7 @@ api.quote.subscribe(contract_txf)  # 訂閱即時ticks資料
 today=datetime.now().strftime('%F')
 beforeYesterday=(datetime.now()-timedelta(days=1))
 if beforeYesterday.isoweekday() ==7:
-    beforeYesterday=(datetime.now()-timedelta(days=3)).strftime('%F')
+    beforeYesterday=(datetime.now()-timedelta(days=3))
 else:
     beforeYesterday=(datetime.now()-timedelta(days=1)).strftime('%F')
 kbars = api.kbars(contract_txf, start=beforeYesterday, end=today)  # 讀入歷史1分K
@@ -303,6 +393,9 @@ df2.reset_index(drop=True)
 df3.dropna(axis=0, how='any', inplace=True)
 df3.reset_index(drop=True) 
 
+# 交易回報
+api.set_order_callback(place_cb)
+
 # 儲存df檢查正確性
 # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=1)
 # df2.to_csv('/Users/apple/Documents/code/PythonX86/Output/df2.csv',index=1)
@@ -314,11 +407,20 @@ if ifTF2:
     direction2=st._RSI_HTF(df2,timeFrame2)
     direction2_pre=direction2
     print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2)
-if ifTF3:
-    direction3=st._RSI_HTF(df3,timeFrame3)
-    direction3_pre=direction3
-    print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
-
+    if ifTF3:
+        direction3=st._RSI_HTF(df3,timeFrame3)
+        direction3_pre=direction3
+        print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,timeFrame3,direction3)
+        all_timeframes=pd.DataFrame([], columns = ['Symbol', str(timeFrame2),str(timeFrame3)]) 
+        all_timeframes.loc[0]=futureSymbol,direction2,direction3
+        all_timeframes.to_csv('/Users/apple/Documents/code/PythonX86/Output/all_timeframes.csv',index=0)
+    else:
+        all_timeframes=pd.DataFrame([], columns = ['Symbol', str(timeFrame2)]) 
+        all_timeframes.loc[0]=futureSymbol,direction2
+        all_timeframes.to_csv('/Users/apple/Documents/code/PythonX86/Output/all_timeframes.csv',index=0)
+else:
+    all_timeframes=pd.DataFrame([]) 
+    all_timeframes.to_csv('/Users/apple/Documents/code/PythonX86/Output/all_timeframes.csv',index=0)
 
 # 選定選擇權合約
 def selectOption():
@@ -441,6 +543,8 @@ def q(topic, quote):
     global direction3_pre
     global ifTF2
     global ifTF3
+    global offMarket
+    
     
     conditionBuy=False
     conditionSell=False
@@ -450,11 +554,7 @@ def q(topic, quote):
         quote['Close'], list) else quote['Close']  # 放入tick值
     
 
-    # 測試用
-    # df1 = pd.DataFrame(data1,columns=['ts','Close'])
-    # df1.ts = pd.to_datetime(df1.ts)
-    # df1.index = df1.ts
-    # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=0)
+    
     
     
     
@@ -463,6 +563,12 @@ def q(topic, quote):
     offMarket =ifOffMarket()   # 是否交易時間之外
     if not offMarket:
         data1.append([ts, close])
+        # 測試ticks接收
+        # dfTick = pd.DataFrame(data1,columns=['ts','Close'])
+        # dfTick.ts = pd.to_datetime(dfTick.ts)
+        # dfTick.index = dfTick.ts
+        # dfTick.to_csv('/Users/apple/Documents/code/PythonX86/Output/dfTick.csv',index=0)
+    
     # 判斷是否小週期收K線
     if (not offMarket and ts.minute/timeFrame1 == ts.minute//timeFrame1 and nextMinute1 != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and nextMinute1 != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
         nextMinute1 = ts.minute  # 相同的minute1分鐘內只重組一次
@@ -505,11 +611,15 @@ def q(topic, quote):
                         if direction==direction2 and direction2==direction3:
                             print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
                             sendTelegram('All direction: '+direction,token,chatid)
+                            all_timeframes.loc[0]=direction2,direction3
+                            all_timeframes.to_csv('/Users/apple/Documents/code/PythonX86/Output/all_timeframes.csv',index=0)
                     else:
                         print(datetime.fromtimestamp(int(datetime.now().timestamp())),'['+str(timeFrame2)+']',direction2)
                         if direction==direction2:
                             print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
                             sendTelegram('All direction: '+direction,token,chatid)
+                            all_timeframes.loc[0]=direction2
+                            all_timeframes.to_csv('/Users/apple/Documents/code/PythonX86/Output/all_timeframes.csv',index=0)
                     direction2_pre=direction2
                 
                 # 判斷是否大週期收K線
@@ -533,20 +643,22 @@ def q(topic, quote):
                         # 檢查收K線之後大週期的多空
                         
                         direction3=st._RSI_HTF(df3,timeFrame3)
-                        conditionBuy=signal =='BUY' and direction2=='BUY' and direction3=='BUY'
-                        conditionSell=signal =='SELL' and direction2=='SELL' and direction3=='SELL'
+                        conditionBuy=signal =='BUY' and direction2!='SELL' and direction3!='SELL'
+                        conditionSell=signal =='SELL' and direction2!='BUY' and direction3!='BUY'
                         
                         if direction3!=direction3_pre:
                             print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,'['+str(timeFrame3)+']',direction3)
                             sendTelegram(str(timeFrame3)+' min '+direction3,token,chatid)
+                            all_timeframes.loc[0]=direction2,direction3
+                            all_timeframes.to_csv('/Users/apple/Documents/code/PythonX86/Output/all_timeframes.csv',index=0)
                             direction3_pre=direction3
                             if direction==direction2 and direction2==direction3:
                                 print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
                                 sendTelegram('All direction: '+direction,token,chatid)  
                              
                 else:
-                    conditionBuy=signal =='BUY' and direction2=='BUY' 
-                    conditionSell=signal =='SELL' and direction2=='SELL'
+                    conditionBuy=signal =='BUY' and direction2!='SELL' 
+                    conditionSell=signal =='SELL' and direction2!='BUY'
                     
             
             # 濾網開關
@@ -561,6 +673,7 @@ def q(topic, quote):
             
         #依照設定更改動作
         readOrder()
+        readConfig()
         settingChange()
         
         # 突破（未完工） 
@@ -662,12 +775,8 @@ def q(topic, quote):
                     toCSV(tradeRecord,openTrade)   
                     # tradeRecord={}        
 
-# 交易回報
-# def place_cb(stat, msg):
-#     print(datetime.fromtimestamp(int(datetime.now().timestamp())),
-#           '__my_place_callback__')
-#     print(datetime.fromtimestamp(int(datetime.now().timestamp())), stat, msg)
-#     return
+
+
 
 # 重組ticks轉換5分K
 def resampleBar(period,data1):
