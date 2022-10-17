@@ -28,15 +28,11 @@
 增加選擇幾個週期濾網
 開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看:2022-10-12 08:45:00 Market:Opened 3K Bar:2022-10-12 08:42
 收盤沒有收K線
-
-[bugs]
 前一天假日沒資料：檢測前一天日期是否存在，如果沒有就一直到有日期的那天抓資料。
 
 [未完工]
-實際交易
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 在call-back函數之外再建立執行緒來計算
-
 選擇權的報價
 停損:半價
 加碼
@@ -51,6 +47,7 @@ tradingview來啟動 to IB&SinoPac API.
 交易ETF
 
 '''
+from asyncore import loop
 import sys
 import os
 sys.path.append('/Users/apple/Documents/code/PythonX86')
@@ -120,6 +117,7 @@ def readConfig():
     ifTF3=True if timeFrame3.isdigit() else False
     ifTF3=False if not ifTF2 else ifTF3
     
+    
     # 記錄原值做比較是否改變，有則提醒
     timeFrame1Pre=timeFrame1
     timeFrame2Pre=timeFrame2
@@ -128,19 +126,6 @@ def readConfig():
     ifAutoExitPre=ifAutoExit
     
     return
-
-
-def readTelegram():
-    global config
-    global token
-    global chatid
-    
-    config.read(
-    '/Users/apple/Documents/code/PythonX86/Settings/TelegramConfig.cfg')
-    token = config.get('Section_A', 'token')
-    chatid = config.get('Section_A', 'chatid')
-    return
-
 
 # 讀取config
 readConfig()
@@ -159,6 +144,37 @@ api.activate_ca(
     ca_passwd=CAPWD,
     person_id=PI,
 )
+
+# 基本設定
+# 呼叫策略函式
+StrategyType = 'API'  # 告訴策略用API方式來處理訊號
+st = Strategies(StrategyType)   # 策略函式
+rm = RiskManage(StrategyType, 2)    # 風控函式
+
+# 2022年休市日期
+holidays_list=['1/1','1/26','1/31','2/1','2/2','2/3','2/4','2/7','2/28','4/4','4/5','5/1','5/2','6/3','9/9','9/10','10/10']
+
+# K線重組字典
+resDict = {
+    'Open': 'first',
+    'High': 'max',
+    'Low': 'min',
+    'Close': 'last'
+}
+
+# 從合約讀取選擇權形式字典
+optionDict = {'OptionRight.Call': 'Call', 'OptionRight.Put':'Put'}
+
+def readTelegram():
+    global config
+    global token
+    global chatid
+    
+    config.read(
+    '/Users/apple/Documents/code/PythonX86/Settings/TelegramConfig.cfg')
+    token = config.get('Section_A', 'token')
+    chatid = config.get('Section_A', 'chatid')
+    return
 
 # 讀入telegram資料
 readTelegram()
@@ -303,8 +319,11 @@ def fromCSV():
     
 # 檢查是否為休市期間
 def ifOffMarket():
+    global holidays_list
     # print('1',(datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45'),'2',(datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00'),'3',(datetime.now().isoweekday() in [6, 7]),'4',((datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] ))
-    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [6, 7]   
+    
+    
+    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [6, 7] or datetime.now().strftime('%m/%d') in holidays_list   
 
 # 交易回報
 def place_cb(stat, msg):
@@ -314,14 +333,12 @@ def place_cb(stat, msg):
         print(stat['operation']['op_code'])
         sendTelegram(stat['operation']['op_code'], token, chatid)  
     if stat['operation']['op_type']=='New':
+        print(stat['order'])
+    print(msg)
             
     return
 
-# 基本設定
-# 呼叫策略函式
-StrategyType = 'API'  # 告訴策略用API方式來處理訊號
-st = Strategies(StrategyType)   # 策略函式
-rm = RiskManage(StrategyType, 2)    # 風控函式
+
 
 offMarket =ifOffMarket()   # 是否交易時間之外
 placedOrder = 0  # 一開始下單次數為零
@@ -338,39 +355,34 @@ contract_txf = selectFutures()  # 選定期指合約
 # 讀入過去交易紀錄
 tradeRecord,openTrade=fromCSV()
 
-# 歷史報價
-api.quote.subscribe(contract_txf)  # 訂閱即時ticks資料
+# 訂閱即時ticks資料
+api.quote.subscribe(contract_txf)  
 today=datetime.now().strftime('%F')
-beforeYesterday=(datetime.now()-timedelta(days=1))
-if beforeYesterday.isoweekday() ==7:
-    beforeYesterday=(datetime.now()-timedelta(days=3))
-else:
-    beforeYesterday=(datetime.now()-timedelta(days=1)).strftime('%F')
+beforeYesterday=(datetime.now()-timedelta(days=1)) # 抓取昨日資料的資料量足夠產生訊號 
+offMarketDay=beforeYesterday.isoweekday() in [6,7] or beforeYesterday.strftime('%m/%d') in holidays_list 
+
+# 如果昨天休市往前一直找到非休市日
+ds=1
+while offMarketDay:
+    beforeYesterday=(datetime.now()-timedelta(days=ds))
+    offMarketDay=beforeYesterday.isoweekday() in [6,7] or beforeYesterday.strftime('%m/%d') in holidays_list 
+    ds+=1
+beforeYesterday=beforeYesterday.strftime('%F')
+
+# 讀入歷史1分K
 kbars = api.kbars(contract_txf, start=beforeYesterday, end=today)  # 讀入歷史1分K
-# kbars = api.kbars(contract_txf)  # 讀入歷史1分K
+# kbars = api.kbars(contract_txf)  
 df0 = pd.DataFrame({**kbars})  # 先將Kbars物件轉換為Dict，再傳入DataFrame做轉換
 df0.ts = pd.to_datetime(df0.ts)  # 將原本的ts欄位中的資料，轉換為DateTime格式並回存
 df0.index = df0.ts  # 將ts資料，設定為DataFrame的index
 
-# K線重組字典
-resDict = {
-    'Open': 'first',
-    'High': 'max',
-    'Low': 'min',
-    'Close': 'last'
-}
-
-# 從合約讀取選擇權形式字典
-optionDict = {'OptionRight.Call': 'Call', 'OptionRight.Put':'Put'}
-
-# 重組1分線為小、中、大週期Ｋ線
-# 小週期
+# 重組1分線為小週期Ｋ線
 df1 = df0.resample(str(timeFrame1)+'min', closed='left',label='left').agg(resDict)  
 df1.reset_index(inplace=True)
-# 中週期
+# 重組1分線為中週期Ｋ線
 df2 = df0.resample(str(timeFrame2)+'min', closed='left',label='left').agg(resDict)  
 df2.reset_index(inplace=True)
-# 大週期
+# 重組1分線為大週期Ｋ線
 df3 = df0.resample(str(timeFrame3)+'min', closed='left',label='left').agg(resDict)  
 df3.reset_index(inplace=True)
 # 刪除1分鐘線節省記憶體
@@ -585,7 +597,7 @@ def q(topic, quote):
         
         # 判斷是否中週期收K線
         if ifTF2:
-            if (ts.minute/int(timeFrame2) == ts.minute//int(timeFrame2) and nextMinute2 != ts.strftime('%H:%M')) or (datetime.now().strftime('%H:%M') in ['13:45','05:00'] and nextMinute2 != ts.strftime('%H:%M')):
+            if (ts.minute/int(timeFrame2) == ts.minute//int(timeFrame2) and nextMinute2 != ts.strftime('%H:%M')):
                 # print(int(datetime.now().timestamp()/(timeFrame2*60))-int(unixtime/(timeFrame2*60)))
                 nextMinute2 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
                 df_res2=df1.copy()
@@ -659,13 +671,7 @@ def q(topic, quote):
                 else:
                     conditionBuy=signal =='BUY' and direction2!='SELL' 
                     conditionSell=signal =='SELL' and direction2!='BUY'
-                    
-            
-            # 濾網開關
-            elif ifTF2==False:
-                direction2_pre=direction
-                direction2=direction
-        
+                    print('conditionBuy:',conditionBuy,'signal==BUY',signal =='BUY','direction2!=SELL:',direction2!='SELL')
         else:
             conditionBuy=signal =='BUY'
             conditionSell=signal =='SELL'
@@ -687,6 +693,8 @@ def q(topic, quote):
             # 停損（未完工）
             # if close<stopLossPrice:
             
+            
+            print(conditionBuy)
     
             # if signal =='BUY' and direction2=='BUY' and direction3=='BUY':  #進場訊號 
             if conditionBuy:  #進場訊號 
