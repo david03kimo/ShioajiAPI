@@ -655,8 +655,7 @@ def q(topic, quote):
                         # 檢查收K線之後大週期的多空
                         
                         direction3=st._RSI_HTF(df3,timeFrame3)
-                        conditionBuy=signal =='BUY' and direction2!='SELL' and direction3!='SELL'
-                        conditionSell=signal =='SELL' and direction2!='BUY' and direction3!='BUY'
+                        
                         
                         if direction3!=direction3_pre:
                             print(datetime.fromtimestamp(int(datetime.now().timestamp())),timeFrame2,direction2,'['+str(timeFrame3)+']',direction3)
@@ -667,15 +666,19 @@ def q(topic, quote):
                             if direction==direction2 and direction2==direction3:
                                 print(datetime.fromtimestamp(int(datetime.now().timestamp())),'All direction:',direction)
                                 sendTelegram('All direction: '+direction,token,chatid)  
-                             
-                else:
-                    conditionBuy=signal =='BUY' and direction2!='SELL' 
-                    conditionSell=signal =='SELL' and direction2!='BUY'
-                    print('conditionBuy:',conditionBuy,'signal==BUY',signal =='BUY','direction2!=SELL:',direction2!='SELL')
+        
+        # 判斷買進條件
+        if ifTF2 and ifTF3:
+            conditionBuy=signal =='BUY' and direction2!='SELL' and direction3!='SELL'
+            conditionSell=signal =='SELL' and direction2!='BUY' and direction3!='BUY'
+        elif ifTF2:
+            conditionBuy=signal =='BUY' and direction2!='SELL' 
+            conditionSell=signal =='SELL' and direction2!='BUY'
+            print('conditionBuy:',conditionBuy,'signal==BUY',signal =='BUY','direction2!=SELL:',direction2!='SELL')
+            print('conditionSell:',conditionSell,'signal==SELL',signal =='SELL','direction2!=BUY:',direction2!='BUY')
         else:
             conditionBuy=signal =='BUY'
             conditionSell=signal =='SELL'
-        
             
         #依照設定更改動作
         readOrder()
