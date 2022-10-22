@@ -32,6 +32,7 @@
 
 [未完工]
 處理OrderState，Live從API回報了解庫存，未成交單子處理
+即時大週期K線指標？
 在call-back函數之外再建立執行緒來計算
 選擇權的報價
 停損:半價
@@ -74,6 +75,18 @@ def readConfig():
     global PWD
     global CAPath
     global CAPWD
+
+    config = configparser.ConfigParser()
+    config.read('/Users/apple/Documents/code/PythonX86/Settings/config.cfg')  # 讀入個人資料
+    PI = str(config.get('Login', 'PersonalId'))
+    PWD = str(config.get('Login', 'PassWord'))
+    CAPath = str(config.get('Login', 'CAPath'))
+    CAPWD = str(config.get('Login', 'CAPassWord'))
+    
+    
+    return
+
+def Tradingsettings():
     global timeFrame1
     global timeFrame2
     global timeFrame3
@@ -88,11 +101,7 @@ def readConfig():
     global ifAutoExitPre
     
     config = configparser.ConfigParser()
-    config.read('/Users/apple/Documents/code/PythonX86/Settings/config.cfg')  # 讀入個人資料
-    PI = str(config.get('Login', 'PersonalId'))
-    PWD = str(config.get('Login', 'PassWord'))
-    CAPath = str(config.get('Login', 'CAPath'))
-    CAPWD = str(config.get('Login', 'CAPassWord'))
+    config.read('/Users/apple/Documents/code/PythonX86/Settings/TradeSettings.cfg')  # 讀入交易設定
     try:
         timeFrame1 = int(config.get('Trade', 'timeFrame1')) # 讀入交易設定：小週期K線週期
     except:
@@ -111,8 +120,8 @@ def readConfig():
     nDollar = int(config.get('Trade', 'nDollar'))   # 讀入交易設定：選擇權在多少錢以下
     # ifTF2 = bool(config.get('Trade', 'ifTF2'))   # 讀入交易設定：選擇權在多少錢以下
     # ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
-    ifAutoExit = bool(config.get('Trade', 'ifAutoExit'))   # 讀入交易設定：選擇權在多少錢以下
-
+    ifAutoExit = eval(config.get('Trade', 'ifAutoExit'))   # 讀入交易設定：選擇權在多少錢以下
+    
     ifTF2=True if timeFrame2.isdigit() else False
     ifTF3=True if timeFrame3.isdigit() else False
     ifTF3=False if not ifTF2 else ifTF3
@@ -129,6 +138,8 @@ def readConfig():
 
 # 讀取config
 readConfig()
+Tradingsettings()
+# print('start',ifAutoExit)
 
 # 登入帳號
 api.login(
@@ -236,12 +247,12 @@ def settingChange():
     global timeFrame1
     global timeFrame2
     global timeFrame3
-    global nDollar
-    global ifAutoExit
     global timeFrame1Pre
     global timeFrame2Pre
     global timeFrame3Pre
+    global nDollar
     global nDollarPre
+    global ifAutoExit
     global ifAutoExitPre
     
     if (qtyPre!=qty) or (directionPre!=direction) or (accountTypePre!=accountType):
@@ -322,23 +333,7 @@ def ifOffMarket():
     global holidays_list
     # print('1',(datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45'),'2',(datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00'),'3',(datetime.now().isoweekday() in [6, 7]),'4',((datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] ))
     
-    
-    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [6, 7] or datetime.now().strftime('%m/%d') in holidays_list   
-
-# 交易回報
-def place_cb(stat, msg):
-    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'__my_place_callback__')
-    print(datetime.fromtimestamp(int(datetime.now().timestamp())),stat, msg)
-    if stat['operation']['op_code']!='00':
-        print(stat['operation']['op_code'])
-        sendTelegram(stat['operation']['op_code'], token, chatid)  
-    if stat['operation']['op_type']=='New':
-        print(stat['order'])
-    print(msg)
-            
-    return
-
-
+    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [6, 7] or datetime.now().strftime('%m/%d') in holidays_list
 
 offMarket =ifOffMarket()   # 是否交易時間之外
 placedOrder = 0  # 一開始下單次數為零
@@ -346,6 +341,7 @@ placedOrder = 0  # 一開始下單次數為零
 #依照設定來動作
 readOrder()
 settingChange()
+
 # 模擬賬戶紀錄
 tradeRecord={}
 openTrade=[]    #紀錄未平倉
@@ -405,8 +401,7 @@ df2.reset_index(drop=True)
 df3.dropna(axis=0, how='any', inplace=True)
 df3.reset_index(drop=True) 
 
-# 交易回報
-api.set_order_callback(place_cb)
+
 
 # 儲存df檢查正確性
 # df1.to_csv('/Users/apple/Documents/code/PythonX86/Output/df1.csv',index=1)
@@ -529,11 +524,10 @@ def code2symbol(code):
         print('error code')
     return sym
 
-
-
 # 接收tick報價
 @api.quote.on_quote
 def q(topic, quote):
+    global accountType
     global nextMinute1
     global nextMinute2
     global nextMinute3
@@ -547,6 +541,9 @@ def q(topic, quote):
     global timeFrame1
     global timeFrame2
     global timeFrame3
+    global timeFrame1Pre
+    global timeFrame2Pre
+    global timeFrame3Pre
     global openTrade
     global optionDict
     global direction2
@@ -556,7 +553,10 @@ def q(topic, quote):
     global ifTF2
     global ifTF3
     global offMarket
-    
+    global nDollar
+    global nDollarPre
+    global ifAutoExit
+    global ifAutoExitPre
     
     conditionBuy=False
     conditionSell=False
@@ -564,12 +564,6 @@ def q(topic, quote):
     ts = pd.Timestamp(quote['Date']+' '+quote['Time'][:8])  # 讀入Timestamp
     close = quote['Close'][0] if isinstance(
         quote['Close'], list) else quote['Close']  # 放入tick值
-    
-
-    
-    
-    
-    
     
     # Timestamp在timeFrame1或timeFrame1的倍數時以及收盤時進行一次tick重組分K
     offMarket =ifOffMarket()   # 是否交易時間之外
@@ -674,15 +668,15 @@ def q(topic, quote):
         elif ifTF2:
             conditionBuy=signal =='BUY' and direction2!='SELL' 
             conditionSell=signal =='SELL' and direction2!='BUY'
-            print('conditionBuy:',conditionBuy,'signal==BUY',signal =='BUY','direction2!=SELL:',direction2!='SELL')
-            print('conditionSell:',conditionSell,'signal==SELL',signal =='SELL','direction2!=BUY:',direction2!='BUY')
+            # print('conditionBuy:',conditionBuy,'signal==BUY',signal =='BUY','direction2!=SELL:',direction2!='SELL')
+            # print('conditionSell:',conditionSell,'signal==SELL',signal =='SELL','direction2!=BUY:',direction2!='BUY')
         else:
             conditionBuy=signal =='BUY'
             conditionSell=signal =='SELL'
             
         #依照設定更改動作
         readOrder()
-        readConfig()
+        Tradingsettings()
         settingChange()
         
         # 突破（未完工） 
@@ -690,16 +684,11 @@ def q(topic, quote):
         
         # print(direction2,direction3)
         # Buy call訊號處理
+        
+        
         if direction=='BUY':  
-            
-            
             # 停損（未完工）
             # if close<stopLossPrice:
-            
-            
-            print(conditionBuy)
-    
-            # if signal =='BUY' and direction2=='BUY' and direction3=='BUY':  #進場訊號 
             if conditionBuy:  #進場訊號 
                 if len(openTrade)==0:
                     contract_txo = selectOption()   #選擇選擇權合約
@@ -717,7 +706,8 @@ def q(topic, quote):
                                                          'Commision':18*qty,
                                                          'Tax':math.ceil(closePrice*50*0.001*qty),
                                                          'TP':0.,
-                                                         'SL':5.
+                                                         'SL':5.,
+                                                         'Account Type':accountType
                                                          }
                     # 紀錄未平倉紀錄
                     openTrade.append(list(tradeRecord.keys())[-1])
@@ -728,6 +718,8 @@ def q(topic, quote):
                     # api.quote.subscribe(contract_txo)                      
                     
                 elif len(openTrade)!=0:     #如果未平倉不為零，留作未來加碼用
+                    # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'openTrade!=0')
+
                     pass
             
             elif signal=='SELL' and ifAutoExit:    #出場訊號 
@@ -763,11 +755,13 @@ def q(topic, quote):
                                                          'Commision':18*qty,
                                                          'Tax':math.ceil(closePrice*50*0.001*qty),
                                                          'TP':0.,
-                                                         'SL':5.
+                                                         'SL':5.,
+                                                         'Account Type':accountType
                                                          }
                     openTrade.append(list(tradeRecord.keys())[-1])
                     toCSV(tradeRecord,openTrade)
                 elif len(openTrade)!=0:
+                    # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'openTrade!=0')
                     pass
                 
             elif signal=='BUY' and ifAutoExit: # 設停損單（未完工）if close<stopLossPrice:
@@ -785,9 +779,6 @@ def q(topic, quote):
                     openTrade=[]
                     toCSV(tradeRecord,openTrade)   
                     # tradeRecord={}        
-
-
-
 
 # 重組ticks轉換5分K
 def resampleBar(period,data1):
@@ -828,7 +819,7 @@ def selectOrder(action,quantity):
         action=action.title(),
         #  price=0.3, #價格
         # price=0,  # 價格
-        price=closePrice-1,  # 價格
+        price=closePrice,  # 價格
         quantity=quantity,  # 口數
          price_type='LMT',
         # price_type='MKP',
@@ -865,6 +856,44 @@ def placeOrder(contract_txo, order):
         sendTelegram(accountType+' Account '+  order.action.upper()+' '+optionDict[str(contract_txo.option_right)].upper()+' '+contract_txo.symbol+'@'+str(closePrice), token, chatid)
 
     return
+
+# 交易回報
+def place_cb(stat, msg):
+    print(datetime.fromtimestamp(int(datetime.now().timestamp())),'place_callback:')
+    print(datetime.fromtimestamp(int(datetime.now().timestamp())),stat, msg)
+    
+    
+    if stat=='OrderState.FOrder':
+        
+        optionRight='C' if str(msg['contract'].get('option_right'))=='OptionCall' else 'P'
+    
+        if msg['operation'].get('op_type')=='New' and msg['operation'].get('op_code')=='00': 
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'委託：','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
+
+            # 發送Telegram
+        
+        
+        if msg['operation'].get('op_code')!='00':
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),msg['operation'].get('op_code'),msg['operation'].get('op_msg'))
+            sendTelegram(msg['operation'].get('op_code')+msg['operation'].get('op_msg'), token, chatid)
+        
+            # 發送Telegram
+            
+            
+        if msg['operation'].get('op_type')!='Cancel':
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'訂單取消','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
+            
+            # 發送Telegram
+            
+    if stat=='OrderState.FDeal':
+        optionRight='C' if str(msg['option_right'])=='OptionCall' else 'P'
+        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'訂單成交:','買入' if msg['action']=='Buy' else '賣出' if msg['action']=='Sell' else '','價格',msg['price'],'數量',msg['quantity'],msg['code']+msg['delivery_month']+str(int(msg['strike_price']))+optionRight)
+        
+            
+    return
+
+# 交易回報
+api.set_order_callback(place_cb)
 
 def symbol2Contract(symbol):
     contract = api.Contracts.Options[symbol[:3]][symbol]
