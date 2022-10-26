@@ -30,14 +30,21 @@
 收盤沒有收K線
 前一天假日沒資料：檢測前一天日期是否存在，如果沒有就一直到有日期的那天抓資料。
 
+
+[問題]
+沒下單
+
 [未完工]
 處理OrderState，Live從API回報了解庫存，未成交單子處理
+資料沒有繼續進來
 即時大週期K線指標？
 在call-back函數之外再建立執行緒來計算
 選擇權的報價
+彙整修正同向的提醒
 停損:半價
 加碼
 觸價突破單
+參考大大的程式
 三重濾網
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
 接上callback 函數作為回測
@@ -46,6 +53,7 @@ tradingview來啟動 to IB&SinoPac API.
 周選合約裡面找划算的
 交易股票期貨、選擇權
 交易ETF
+
 
 '''
 from asyncore import loop
@@ -99,6 +107,8 @@ def Tradingsettings():
     global timeFrame3Pre
     global nDollarPre
     global ifAutoExitPre
+    global ifCloseBar
+    global ifCloseBarPre
     
     config = configparser.ConfigParser()
     config.read('/Users/apple/Documents/code/PythonX86/Settings/TradeSettings.cfg')  # 讀入交易設定
@@ -121,6 +131,7 @@ def Tradingsettings():
     # ifTF2 = bool(config.get('Trade', 'ifTF2'))   # 讀入交易設定：選擇權在多少錢以下
     # ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
     ifAutoExit = eval(config.get('Trade', 'ifAutoExit'))   # 讀入交易設定：選擇權在多少錢以下
+    ifCloseBar = eval(config.get('Trade', 'ifCloseBar'))   # 讀入交易設定：選擇權在多少錢以下
     
     ifTF2=True if timeFrame2.isdigit() else False
     ifTF3=True if timeFrame3.isdigit() else False
@@ -133,7 +144,7 @@ def Tradingsettings():
     timeFrame3Pre=timeFrame3
     nDollarPre=nDollar
     ifAutoExitPre=ifAutoExit
-    
+    ifCloseBarPre=ifCloseBar
     return
 
 # 讀取config
@@ -254,6 +265,9 @@ def settingChange():
     global nDollarPre
     global ifAutoExit
     global ifAutoExitPre
+    global ifCloseBar
+    global ifCloseBarPre
+    
     
     if (qtyPre!=qty) or (directionPre!=direction) or (accountTypePre!=accountType):
         print('Setting:',accountType,'account',direction,qty)
@@ -278,6 +292,11 @@ def settingChange():
         print('Auto Exit is',ifAutoExit)
         sendTelegram('Auto Exit is  '+str(ifAutoExit), token, chatid)  
         ifAutoExitPre=ifAutoExit
+    
+    if (ifCloseBar!=ifCloseBarPre):
+        print('If act at HTF Bar closed',ifCloseBar)
+        sendTelegram('If act at HTF Bar closed '+str(ifCloseBar), token, chatid)  
+        ifCloseBarPre=ifCloseBar
         
     return
 
@@ -557,6 +576,8 @@ def q(topic, quote):
     global nDollarPre
     global ifAutoExit
     global ifAutoExitPre
+    global ifCloseBar
+    global ifCloseBarPre
     
     conditionBuy=False
     conditionSell=False
@@ -589,8 +610,31 @@ def q(topic, quote):
         # 進場訊號
         signal = st._RSI(df1)
         
+        
+        
+        # 大週期即時K線
+        '''    
+        self.df5[reqId]=self.df1[reqId].set_index('DateTime').resample(str(self.timeframe5)+'min', closed='left', label='left').agg(self.res_dict)
+        self.df5[reqId].dropna(axis=0, how='any', inplace=True)  # 去掉交易時間外的空行
+        self.df5[reqId].reset_index(drop=True)
+        self.direction5[reqId]=self.st._RSI_HTF(reqId,self.df5[reqId],self.timeframe5)
+        '''
+        
+        if not ifCloseBar:
+        
+            df2=df1.set_index('ts').resample(str(timeFrame2)+'min', closed='left', label='left').agg(resDict)
+            df2.dropna(axis=0, how='any', inplace=True)  
+            df2.reset_index(drop=True)
+            direction2=st._RSI_HTF(df2,timeFrame2)
+            
+            df3=df1.set_index('ts').resample(str(timeFrame3)+'min', closed='left', label='left').agg(resDict)
+            df3.dropna(axis=0, how='any', inplace=True)  
+            df3.reset_index(drop=True)
+            direction3=st._RSI_HTF(df3,timeFrame3)
+        
+        
         # 判斷是否中週期收K線
-        if ifTF2:
+        elif ifTF2:
             if (ts.minute/int(timeFrame2) == ts.minute//int(timeFrame2) and nextMinute2 != ts.strftime('%H:%M')):
                 # print(int(datetime.now().timestamp()/(timeFrame2*60))-int(unixtime/(timeFrame2*60)))
                 nextMinute2 = ts.strftime('%H:%M')  # 相同的minute1分鐘內只重組一次
