@@ -35,13 +35,14 @@
 沒下單
 
 [未完工]
+增加alert。切換DEMO,LIVE,ALERT
 處理OrderState，Live從API回報了解庫存，未成交單子處理
 資料沒有繼續進來
 即時大週期K線指標？
 在call-back函數之外再建立執行緒來計算
 選擇權的報價
 彙整修正同向的提醒
-停損:半價
+停損:半價/用期貨的前高前低
 加碼
 觸價突破單
 參考大大的程式
@@ -903,36 +904,54 @@ def placeOrder(contract_txo, order):
 
 # 交易回報
 def place_cb(stat, msg):
+    global tradeRecord
+    global openTrade
+    
     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'place_callback:')
-    print(datetime.fromtimestamp(int(datetime.now().timestamp())),stat, msg)
     
-    
-    if stat=='OrderState.FOrder':
-        
+    if stat==sj.constant.OrderState.FOrder:
         optionRight='C' if str(msg['contract'].get('option_right'))=='OptionCall' else 'P'
-    
-        if msg['operation'].get('op_type')=='New' and msg['operation'].get('op_code')=='00': 
+        # optionRight='C' if str(msg['contract'].get('option_right'))=='OptionCall' else 'P'
+        
+        # 訂單回報
+        # if msg['operation'].get('op_type')=='New' and msg['operation'].get('op_code')=='00': 
+        if msg.get('operation').get('op_type')=='New' and msg.get('operation').get('op_code')=='00': 
             print(datetime.fromtimestamp(int(datetime.now().timestamp())),'委託：','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
 
             # 發送Telegram
         
-        
-        if msg['operation'].get('op_code')!='00':
+        # 異常訂單回報
+        # if msg['operation'].get('op_code')!='00':
+        if msg.get('operation').get('op_code')!='00':
             print(datetime.fromtimestamp(int(datetime.now().timestamp())),msg['operation'].get('op_code'),msg['operation'].get('op_msg'))
             sendTelegram(msg['operation'].get('op_code')+msg['operation'].get('op_msg'), token, chatid)
         
             # 發送Telegram
             
-            
-        if msg['operation'].get('op_type')!='Cancel':
+        # 取消訂單回報
+        # if msg['operation'].get('op_type')!='Cancel':
+        if msg.get('operation').get('op_type')!='Cancel':
             print(datetime.fromtimestamp(int(datetime.now().timestamp())),'訂單取消','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
             
             # 發送Telegram
-            
-    if stat=='OrderState.FDeal':
+    
+    # 成交回報    
+    if stat==sj.constant.OrderState.FDeal:
         optionRight='C' if str(msg['option_right'])=='OptionCall' else 'P'
         print(datetime.fromtimestamp(int(datetime.now().timestamp())),'訂單成交:','買入' if msg['action']=='Buy' else '賣出' if msg['action']=='Sell' else '','價格',msg['price'],'數量',msg['quantity'],msg['code']+msg['delivery_month']+str(int(msg['strike_price']))+optionRight)
         
+        
+        if msg['action']=='Buy':
+            tradeRecord[openTrade[0]]['Entry Price']=msg['price']
+        elif msg['action']=='Sell':
+            if tradeRecord.loc[tradeRecord.index[-1],'Exit Price']==0.0: 
+                tradeRecord.loc[tradeRecord.index[-1],'Exit Price']=msg['price']
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'實際成交價格更新')
+
+            else:
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'實際成交價格更新失敗')
+
+            
             
     return
 
