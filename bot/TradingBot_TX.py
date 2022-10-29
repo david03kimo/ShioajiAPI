@@ -29,27 +29,28 @@
 開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看:2022-10-12 08:45:00 Market:Opened 3K Bar:2022-10-12 08:42
 收盤沒有收K線
 前一天假日沒資料：檢測前一天日期是否存在，如果沒有就一直到有日期的那天抓資料。
-
+即時大週期K線指標
+停損:半價/用期貨的前高前低
+觸價突破單
 
 [問題]
 沒下單
 
 [未完工]
-增加alert。切換DEMO,LIVE,ALERT
 處理OrderState，Live從API回報了解庫存，未成交單子處理
+尾隨停損
+增加alert。切換DEMO,LIVE,ALERT
 資料沒有繼續進來
-即時大週期K線指標？
 在call-back函數之外再建立執行緒來計算
-選擇權的報價
+
 彙整修正同向的提醒
-停損:半價/用期貨的前高前低
 加碼
-觸價突破單
 參考大大的程式
 三重濾網
 績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
 接上callback 函數作為回測
 即時回測
+選擇權的報價
 tradingview來啟動 to IB&SinoPac API.
 周選合約裡面找划算的
 交易股票期貨、選擇權
@@ -353,7 +354,7 @@ def ifOffMarket():
     global holidays_list
     # print('1',(datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45'),'2',(datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00'),'3',(datetime.now().isoweekday() in [6, 7]),'4',((datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') < '15:00') or datetime.now().isoweekday() in [6, 7] ))
     
-    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [6, 7] or datetime.now().strftime('%m/%d') in holidays_list
+    return (datetime.now().strftime('%H:%M') >'05:00' and datetime.now().strftime('%H:%M') < '08:45') or (datetime.now().strftime('%H:%M') > '13:45' and datetime.now().strftime('%H:%M') <'15:00') or datetime.now().isoweekday() in [7] or datetime.now().strftime('%m/%d') in holidays_list
 
 offMarket =ifOffMarket()   # 是否交易時間之外
 placedOrder = 0  # 一開始下單次數為零
@@ -375,13 +376,13 @@ tradeRecord,openTrade=fromCSV()
 api.quote.subscribe(contract_txf)  
 today=datetime.now().strftime('%F')
 beforeYesterday=(datetime.now()-timedelta(days=1)) # 抓取昨日資料的資料量足夠產生訊號 
-offMarketDay=beforeYesterday.isoweekday() in [6,7] or beforeYesterday.strftime('%m/%d') in holidays_list 
+offMarketDay=beforeYesterday.isoweekday() in [7] or beforeYesterday.strftime('%m/%d') in holidays_list 
 
 # 如果昨天休市往前一直找到非休市日
 ds=1
 while offMarketDay:
     beforeYesterday=(datetime.now()-timedelta(days=ds))
-    offMarketDay=beforeYesterday.isoweekday() in [6,7] or beforeYesterday.strftime('%m/%d') in holidays_list 
+    offMarketDay=beforeYesterday.isoweekday() in [7] or beforeYesterday.strftime('%m/%d') in holidays_list 
     ds+=1
 beforeYesterday=beforeYesterday.strftime('%F')
 
@@ -566,6 +567,7 @@ def q(topic, quote):
     global timeFrame3Pre
     global openTrade
     global optionDict
+    global direction
     global direction2
     global direction3
     global direction2_pre
@@ -598,7 +600,7 @@ def q(topic, quote):
         # dfTick.to_csv('/Users/apple/Documents/code/PythonX86/Output/dfTick.csv',index=0)
     
     # 判斷是否小週期收K線
-    if (not offMarket and ts.minute/timeFrame1 == ts.minute//timeFrame1 and nextMinute1 != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and nextMinute1 != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5]):
+    if (not offMarket and ts.minute/timeFrame1 == ts.minute//timeFrame1 and nextMinute1 != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5,6]) or (datetime.now().strftime('%H:%M') in ['13:45', '05:00'] and nextMinute1 != ts.minute and datetime.now().isoweekday() in [1,2,3,4,5,6]):
         nextMinute1 = ts.minute  # 相同的minute1分鐘內只重組一次
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),
         #       'Market:Closed.' if offMarket else 'Market:Opened Bar Label:'+ts.strftime('%F %H:%M'))
@@ -611,7 +613,11 @@ def q(topic, quote):
         # 進場訊號
         signal = st._RSI(df1)
         
+        # 期貨的停損價
+        SL=rm.SL(df1,signal)
         
+        # 期貨的突破價
+        BP=st._BP(df1,direction)
         
         # 大週期即時K線
         '''    
@@ -724,17 +730,14 @@ def q(topic, quote):
         Tradingsettings()
         settingChange()
         
-        # 突破（未完工） 
-        # if close>breakOutPrice:
-        
-        # print(direction2,direction3)
         # Buy call訊號處理
-        
-        
         if direction=='BUY':  
-            # 停損（未完工）
-            # if close<stopLossPrice:
-            if conditionBuy:  #進場訊號 
+            # 是否停損
+            if len(openTrade)!=0:
+                ifStopOut=(close<tradeRecord[openTrade[0]]['SL'])
+            else:
+                ifStopOut=False
+            if conditionBuy or (close>BP and BP!=0):  #進場訊號 
                 if len(openTrade)==0:
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -751,7 +754,7 @@ def q(topic, quote):
                                                          'Commision':18*qty,
                                                          'Tax':math.ceil(closePrice*50*0.001*qty),
                                                          'TP':0.,
-                                                         'SL':5.,
+                                                         'SL':SL,
                                                          'Account Type':accountType
                                                          }
                     # 紀錄未平倉紀錄
@@ -759,6 +762,7 @@ def q(topic, quote):
                     # 寫入csv
                     toCSV(tradeRecord,openTrade)
                     
+
                     # 訂閱選擇權合約ticks報價
                     # api.quote.subscribe(contract_txo)                      
                     
@@ -767,7 +771,8 @@ def q(topic, quote):
 
                     pass
             
-            elif signal=='SELL' and ifAutoExit:    #出場訊號 
+            
+            elif (signal=='SELL' and ifAutoExit) or ifStopOut: 
                 if len(openTrade)!=0:   #有部位
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -783,8 +788,12 @@ def q(topic, quote):
                     # tradeRecord={}  # 清空交易紀錄
                     
         elif direction=='SELL':    #buy put
-            # if signal =='SELL' and direction2=='SELL' and direction3=='SELL':    # 設突破單（未完工） if close>breakOutPrice:
-            if conditionSell:    # 設突破單（未完工） if close>breakOutPrice:
+            # 是否停損
+            if len(openTrade)!=0:
+                ifStopOut=(close>tradeRecord[openTrade[0]]['SL'])
+            else:
+                ifStopOut=False
+            if conditionSell or (close<BP and BP!=0):    # 設突破單（未完工） if close>breakOutPrice:
                 if len(openTrade)==0:
                     contract_txo = selectOption()
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -800,7 +809,7 @@ def q(topic, quote):
                                                          'Commision':18*qty,
                                                          'Tax':math.ceil(closePrice*50*0.001*qty),
                                                          'TP':0.,
-                                                         'SL':5.,
+                                                         'SL':SL,
                                                          'Account Type':accountType
                                                          }
                     openTrade.append(list(tradeRecord.keys())[-1])
@@ -809,7 +818,7 @@ def q(topic, quote):
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'openTrade!=0')
                     pass
                 
-            elif signal=='BUY' and ifAutoExit: # 設停損單（未完工）if close<stopLossPrice:
+            elif signal=='BUY' and ifAutoExit or ifStopOut:
                 if len(openTrade)!=0:
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol'])
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -951,8 +960,6 @@ def place_cb(stat, msg):
             else:
                 print(datetime.fromtimestamp(int(datetime.now().timestamp())),'實際成交價格更新失敗')
 
-            
-            
     return
 
 # 交易回報
