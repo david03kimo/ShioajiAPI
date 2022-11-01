@@ -31,16 +31,17 @@
 前一天假日沒資料：檢測前一天日期是否存在，如果沒有就一直到有日期的那天抓資料。
 即時大週期K線指標
 停損:半價/用期貨的前高前低
-觸價突破單
+
 
 [問題]
 沒下單
+資料沒有繼續進來
+觸價突破單:邏輯不完整
 
 [未完工]
-處理OrderState，Live從API回報了解庫存，未成交單子處理
+處理OrderState，Live從API回報了解庫存，未成交單子處理:openOrder,closedOrder,openPosition,openOrder,closedOrder,closedPosition
 尾隨停損
 增加alert。切換DEMO,LIVE,ALERT
-資料沒有繼續進來
 在call-back函數之外再建立執行緒來計算
 
 彙整修正同向的提醒
@@ -366,6 +367,7 @@ settingChange()
 # 模擬賬戶紀錄
 tradeRecord={}
 openTrade=[]    #紀錄未平倉
+openOrder=pd.DataFrame([], columns = ['ts','order_id','order_seqno','order_ordno'])   #紀錄未成交
 # fromCSV(tradeRecord,openTrade)
 # 合約設定
 contract_txf = selectFutures()  # 選定期指合約
@@ -566,6 +568,7 @@ def q(topic, quote):
     global timeFrame2Pre
     global timeFrame3Pre
     global openTrade
+    global openOrder
     global optionDict
     global direction
     global direction2
@@ -737,12 +740,15 @@ def q(topic, quote):
                 ifStopOut=(close<tradeRecord[openTrade[0]]['SL'])
             else:
                 ifStopOut=False
-            if conditionBuy or (close>BP and BP!=0):  #進場訊號 
-                if len(openTrade)==0:
+            # if conditionBuy or (close>BP and BP!=0) :  #進場訊號 
+            if conditionBuy:  #進場訊號 
+                # if len(openTrade)==0 and openOrder.empty: # 沒有未平倉部位與未成交訂單
+                if len(openTrade)==0: # 沒有未平倉部位與未成交訂單
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得合約價格
-                    order = selectOrder(signal,qty) #設定訂單
+                    # order = selectOrder(signal,qty) #設定訂單
+                    order = selectOrder('BUY',qty) #設定訂單
                     placeOrder(contract_txo, order) #下單
                     # 紀錄模擬交易紀錄
                     tradeRecord[ts.strftime('%F %H:%M:%S')]={'Symbol':contract_txo.symbol,
@@ -759,6 +765,12 @@ def q(topic, quote):
                                                          }
                     # 紀錄未平倉紀錄
                     openTrade.append(list(tradeRecord.keys())[-1])
+                    
+                    # 紀錄未成交紀錄
+                    openOrder.loc[list(tradeRecord.keys())[-1],'ts']=list(tradeRecord.keys())[-1]
+                    openOrder.to_csv('/Users/apple/Documents/code/PythonX86/Output/openOrder.csv',mode='w',index=1)
+
+                    
                     # 寫入csv
                     toCSV(tradeRecord,openTrade)
                     
@@ -777,7 +789,8 @@ def q(topic, quote):
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得目前合約價
-                    order = selectOrder(signal,tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
+                    # order = selectOrder(signal,tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
+                    order = selectOrder('SELL',tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
                     placeOrder(contract_txo, order) #下單
                     tradeRecord[openTrade[0]]['Exit Price']=closePrice  #紀錄出場價格
                     tradeRecord[openTrade[0]]['Commision']=tradeRecord[openTrade[0]]['Commision']+18*tradeRecord[openTrade[0]]['Quantity']  #紀錄手續費
@@ -787,14 +800,17 @@ def q(topic, quote):
                     toCSV(tradeRecord,openTrade)  #存入csv
                     # tradeRecord={}  # 清空交易紀錄
                     
+        # elif direction=='SELL' and openOrder.empty:    #buy put
         elif direction=='SELL':    #buy put
             # 是否停損
             if len(openTrade)!=0:
                 ifStopOut=(close>tradeRecord[openTrade[0]]['SL'])
             else:
                 ifStopOut=False
-            if conditionSell or (close<BP and BP!=0):    # 設突破單（未完工） if close>breakOutPrice:
-                if len(openTrade)==0:
+            # if conditionSell or (close<BP and BP!=0):    # 設突破單（未完工） if close>breakOutPrice:
+            if conditionSell:    # 設突破單（未完工） if close>breakOutPrice:
+                # if len(openTrade)==0 and openOrder.empty: # 沒有未平倉部位與未成交訂單
+                if len(openTrade)==0: # 沒有未平倉部位與未成交訂單
                     contract_txo = selectOption()
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close
@@ -812,13 +828,22 @@ def q(topic, quote):
                                                          'SL':SL,
                                                          'Account Type':accountType
                                                          }
+                    # 紀錄未平倉紀錄
                     openTrade.append(list(tradeRecord.keys())[-1])
+                    
+                    # 紀錄未成交紀錄
+                    openOrder.loc[list(tradeRecord.keys())[-1],'ts']=list(tradeRecord.keys())[-1]
+                    openOrder.to_csv('/Users/apple/Documents/code/PythonX86/Output/openOrder.csv',mode='w',index=1)
+
+                    
+                    # 寫入csv
                     toCSV(tradeRecord,openTrade)
+                    
                 elif len(openTrade)!=0:
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'openTrade!=0')
                     pass
                 
-            elif signal=='BUY' and ifAutoExit or ifStopOut:
+            elif (signal=='BUY' and ifAutoExit) or ifStopOut:
                 if len(openTrade)!=0:
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol'])
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
@@ -915,6 +940,7 @@ def placeOrder(contract_txo, order):
 def place_cb(stat, msg):
     global tradeRecord
     global openTrade
+    global openOrder
     
     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'place_callback:')
     
@@ -926,6 +952,12 @@ def place_cb(stat, msg):
         # if msg['operation'].get('op_type')=='New' and msg['operation'].get('op_code')=='00': 
         if msg.get('operation').get('op_type')=='New' and msg.get('operation').get('op_code')=='00': 
             print(datetime.fromtimestamp(int(datetime.now().timestamp())),'委託：','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
+            
+            # 更新未成交訂單：openOrder
+            openOrder.loc[list(tradeRecord.keys())[-1],'order_id']=msg.get('order').get('id')
+            openOrder.loc[list(tradeRecord.keys())[-1],'order_seqno']=msg.get('order').get('seqno')
+            openOrder.loc[list(tradeRecord.keys())[-1],'order_ordno']=msg.get('order').get('ordno')
+            openOrder.to_csv('/Users/apple/Documents/code/PythonX86/Output/openOrder.csv',mode='w',index=1)
 
             # 發送Telegram
         
@@ -951,15 +983,25 @@ def place_cb(stat, msg):
         
         
         if msg['action']=='Buy':
+            # 更新交易紀錄：tradeRecord
             tradeRecord[openTrade[0]]['Entry Price']=msg['price']
         elif msg['action']=='Sell':
-            if tradeRecord.loc[tradeRecord.index[-1],'Exit Price']==0.0: 
-                tradeRecord.loc[tradeRecord.index[-1],'Exit Price']=msg['price']
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'實際成交價格更新')
+            # if tradeRecord.loc[tradeRecord.index[-1],'Exit Price']==0.0: 
+            #     tradeRecord.loc[tradeRecord.index[-1],'Exit Price']=msg['price']
+            #     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'實際成交價格更新')
 
-            else:
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'實際成交價格更新失敗')
-
+            # else:
+            #     print(datetime.fromtimestamp(int(datetime.now().timestamp())),'實際成交價格更新失敗')
+            
+            # 更新未成交訂單：openOrder
+            condition=msg.get('seqno')==openOrder.loc[list(tradeRecord.keys())[-1],'order_seqno']
+            openOrder.drop(openOrder[condition],axis=0, inplace=True) 
+            openOrder.to_csv('/Users/apple/Documents/code/PythonX86/Output/openOrder.csv',mode='w',index=1)
+            
+            # 更新交易紀錄：tradeRecord
+            tradeRecord.loc[tradeRecord.index[-1],'Exit Price']=msg['price']
+        # tradeRecord 存入csv
+        toCSV(tradeRecord,openTrade)
     return
 
 # 交易回報
