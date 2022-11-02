@@ -57,7 +57,7 @@ tradingview來啟動 to IB&SinoPac API.
 交易股票期貨、選擇權
 交易ETF
 
-ds
+ds1
 '''
 from asyncore import loop
 import sys
