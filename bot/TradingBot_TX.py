@@ -41,6 +41,9 @@
 tradeRecord要都在place_cb寫，甚至讀取卷商的就好
 
 [未完工]
+有部位/有掛單時不下單
+有部位->有掛單->取消掛單或修改掛單或維持
+有成交單->還有掛單->取消掛單或修改掛單或維持、設停損停利、平倉條件、取消相對邊掛單、移動停損、加碼
 處理OrderState，Live從API回報了解庫存，未成交單子處理:openOrder,closedOrder,openPosition,openOrder,closedOrder,closedPosition
 尾隨停損
 增加alert。切換DEMO,LIVE,ALERT
@@ -594,6 +597,7 @@ def q(topic, quote):
     global ifStopOut
     global today
     global beforeYesterday
+    global trade
     
     conditionBuy=False
     conditionSell=False
@@ -632,6 +636,19 @@ def q(topic, quote):
         # 期貨的突破價
         BP=st._BP(df1,direction)
         
+        #--------------------------
+        # 列出期貨部位
+        positions = api.list_positions(api.futopt_account)
+        df_positions = pd.DataFrame(p.__dict__ for p in positions)
+        df_positions.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/positions.csv',index=0)
+        
+        # 查詢帳戶餘額
+        # accountBalance = api.account_balance()   
+        # df_accountBalance = pd.DataFrame(accountBalance)  
+        # df_accountBalance.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/accountBalance.csv',index=0)
+           
+        #-------------------------
+        
         # 列出平倉
         settlement = api.settlements(api.futopt_account)
         df_settlement=pd.DataFrame(s.__dict__ for s in settlement).set_index("T")  
@@ -649,27 +666,28 @@ def q(topic, quote):
         # df_pl.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/pl.csv',index=0)
 
         # 列出損益
-        profitloss = api.list_profit_loss(api.futopt_account,beforeYesterday,today)   
-        df_profitloss = pd.DataFrame(profitloss)
+        profitloss = api.list_profit_loss(api.futopt_account,beforeYesterday,today) 
+        df_profitloss = pd.DataFrame(p.__dict__ for p in profitloss)
         df_profitloss.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/profitloss.csv',index=0)
 
-        # 列出期貨部位
-        positions = api.list_positions(api.futopt_account)
-        df_positions = pd.DataFrame(p.__dict__ for p in positions)
-        df_positions.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/positions.csv',index=0)
         
         # 查詢現有部位
-        openPosition=api.get_account_openposition(product_type='2', query_type='0', account=api.futopt_account)
+        # openPosition=api.get_account_openposition(product_type='2', query_type='0', account=api.futopt_account)
+        # print(openPosition)
+        # df_openPosition = pd.DataFrame(p.__dict__ for p in openPosition)
+        # df_openPosition.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openPosition.csv',index=0)
+
         # df_openPosition = pd.DataFrame(openPosition)
         # df_openPosition.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/accountBalance.csv',index=0)
            
-        # 查詢帳戶餘額
-        accountBalance = api.account_balance()   
-        df_accountBalance = pd.DataFrame(accountBalance)  
-        df_accountBalance.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/accountBalance.csv',index=0)
-           
+        
         # 查詢保證金
-        margin = api.margin(api.futopt_account) 
+        # margin = api.margin(api.futopt_account) 
+        # margin = api.get_account_margin(api.futopt_account) 
+        # df_margin = pd.DataFrame(p.__dict__ for p in margin)
+        # df_margin.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/margin.csv',index=0)
+
+        
         # print(datetime.fromtimestamp(int(datetime.now().timestamp())),margin)
  
 
@@ -903,6 +921,7 @@ def q(topic, quote):
                     closePrice = snapshots[0].close
                     order = selectOrder('SELL',tradeRecord[openTrade[0]]['Quantity'])
                     placeOrder(contract_txo, order)
+                    
                     # 判別模擬單或實單做交易紀錄
                     if accountType=='DEMO':
                         tradeRecord[openTrade[0]]['Exit Price']=closePrice
@@ -917,8 +936,9 @@ def q(topic, quote):
                         
                         # 交易紀錄寫入CSV
                         toCSV(tradeRecord,openTrade)   
-                        # tradeRecord={}        
-
+                        # tradeRecord={}    
+                        
+        
 # 重組ticks轉換5分K
 def resampleBar(period,data1):
     global df1
@@ -990,6 +1010,7 @@ def placeOrder(contract_txo, order):
     global placedOrder
     global optionDict
     global orderCount
+    global trade
     
     if accountType == 'LIVE':   #實盤時
         if placedOrder <= orderCount:   #在未達限定操作次數時
@@ -997,6 +1018,24 @@ def placeOrder(contract_txo, order):
             trade = api.place_order(contract_txo, order)
             # 顯示訊息
             print(datetime.fromtimestamp(int(datetime.now().timestamp())), accountType,'Account',  order.action.upper(),optionDict[str(contract_txo.option_right)],contract_txo.symbol,'@',str(closePrice))
+            
+            print('=======trade======')
+            print(trade)
+            
+            '''
+            if trade.status.status=='Submitted':
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Submitted:傳送成功')
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.status.status)
+            if trade=='Cancelled':
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Cancelled:已刪除')
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade)
+            if trade=='Filled':
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Filled:完全成交')
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.contract)
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.order)
+                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.status)
+            '''
+            
             # 發送telegram
             sendTelegram(accountType+' Account '+ order.action.upper()+' '+optionDict[str(contract_txo.option_right)]+' '+contract_txo.symbol+'@'+str(closePrice), token, chatid)
             placedOrder += 1
@@ -1026,52 +1065,51 @@ def place_cb(stat, msg):
         optionRight='C' if str(msg['contract'].get('option_right'))=='OptionCall' else 'P'
         # optionRight='C' if str(msg['contract'].get('option_right'))=='OptionCall' else 'P'
         
-        # 訂單回報
-        # if msg['operation'].get('op_type')=='New' and msg['operation'].get('op_code')=='00': 
-        if msg.get('operation').get('op_type')=='New' and msg.get('operation').get('op_code')=='00': 
-            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'委託：','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),'代碼：',msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
-            
-            # 更新未成交訂單：openOrder
-            '''
-            # 紀錄未成交紀錄
-            openOrder.loc[list(tradeRecord.keys())[-1],'ts']=list(tradeRecord.keys())[-1]
-            openOrder.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openOrder.csv',mode='w',index=1)
-
-            # 紀錄未成交紀錄
-            openOrder.loc[list(tradeRecord.keys())[-1],'ts']=list(tradeRecord.keys())[-1]
-            openOrder.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openOrder.csv',mode='w',index=1)
-
-            '''
-            openOrder.loc[list(tradeRecord.keys())[-1],'order_id']=msg.get('order').get('id')
-            openOrder.loc[list(tradeRecord.keys())[-1],'order_seqno']=msg.get('order').get('seqno')
-            openOrder.loc[list(tradeRecord.keys())[-1],'order_ordno']=msg.get('order').get('ordno')
-            openOrder.loc[list(tradeRecord.keys())[-1],'Account Type']=accountType
-            openOrder.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openOrder.csv',mode='w',index=1)
-
-            # 發送Telegram
-        
-        # 異常訂單回報
+        # 異常訂單
         # if msg['operation'].get('op_code')!='00':
         if msg.get('operation').get('op_code')!='00':
             print(datetime.fromtimestamp(int(datetime.now().timestamp())),msg['operation'].get('op_code'),msg['operation'].get('op_msg'))
             sendTelegram(msg['operation'].get('op_code')+msg['operation'].get('op_msg'), token, chatid)
         
             # 發送Telegram
+        
+        # 新訂單
+        # if msg['operation'].get('op_type')=='New' and msg['operation'].get('op_code')=='00': 
+        if msg.get('operation').get('op_type')=='New' and msg.get('operation').get('op_code')=='00': 
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'委託：','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),'代碼：',msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
             
-        # 取消訂單回報
+            #顯示msg
+            print(msg)
+            
+            # 發送Telegram
+            
+            # 紀錄新訂單
+            openOrder.loc[datetime.fromtimestamp(int(msg['status']['exchange_ts'])),'ts']=datetime.fromtimestamp(int(msg['status']['exchange_ts']))
+            openOrder.loc[openOrder.index[-1],'order_id']=msg.get('order').get('id')
+            openOrder.loc[openOrder.index[-1],'order_seqno']=msg.get('order').get('seqno')
+            openOrder.loc[openOrder.index[-1],'order_ordno']=msg.get('order').get('ordno')
+            openOrder.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openOrder.csv',mode='w',index=1)
+             
+            
+        
+        # 訂單更改
+        
+        
+        # 取消訂單
         # if msg['operation'].get('op_type')!='Cancel':
         if msg.get('operation').get('op_type')!='Cancel':
             print(datetime.fromtimestamp(int(datetime.now().timestamp())),'訂單取消','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),'代碼：',msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
+            
+            #顯示msg
+            print(msg)
+            
             
             # 發送Telegram
             
             # 消除openOrder紀錄
             openOrder.drop(openOrder.index[-1],axis=0, inplace=True) 
             openOrder.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openOrder.csv',mode='w',index=1)
-
-
-            
-    
+        
     # 成交回報    
     if stat==sj.constant.OrderState.FDeal:
         print(datetime.fromtimestamp(int(datetime.now().timestamp())),'===成交回報===')
@@ -1080,6 +1118,9 @@ def place_cb(stat, msg):
         
         
         if msg['action']=='Buy':
+            #顯示msg
+            print(msg)
+            
             # 更新交易紀錄：tradeRecord
             tradeRecord[datetime.fromtimestamp(int(msg['ts']))]={
                                                 'Account Type':'LIVE',
@@ -1097,7 +1138,16 @@ def place_cb(stat, msg):
                                                 'TP':0.,
                                                 }
             
+            # 紀錄未平倉紀錄
+            openTrade.append(list(tradeRecord.keys())[-1])
+        
+            # 交易紀錄寫入CSV
+            toCSV(tradeRecord,openTrade)
+            
         elif msg['action']=='Sell':
+            #顯示msg
+            print(msg)
+            
             # 更新交易紀錄：tradeRecord
             tradeRecord[list(tradeRecord.keys())[-1]]['Exit Price']=msg['price']
             tradeRecord[list(tradeRecord.keys())[-1]]['Exit DateTime']=datetime.fromtimestamp(int(msg['ts']))
@@ -1105,20 +1155,13 @@ def place_cb(stat, msg):
             tradeRecord[list(tradeRecord.keys())[-1]]['Tax']=tradeRecord[list(tradeRecord.keys())[-1]]['Tax']+math.ceil(msg['price']*50*0.001*msg['quantity'])  #紀錄稅
             tradeRecord[list(tradeRecord.keys())[-1]]['Realized PNL']=round(50*(msg['price']-tradeRecord[list(tradeRecord.keys())[-1]]['Entry Price']),0) #紀錄實現利潤
             tradeRecord[list(tradeRecord.keys())[-1]]['Unrealized PNL']=round(0.0,0) #未平倉損益歸零
+            
+            #清空未平倉紀錄
+            openTrade=[]    
+            
+            # 交易紀錄寫入CSV
+            toCSV(tradeRecord,openTrade)
        
-        # 更新未成交訂單：openOrder
-        condition=msg.get('seqno')==openOrder.loc[list(tradeRecord.keys())[-1],'order_seqno']
-        condition1=msg.get('ordno')==openOrder.loc[list(tradeRecord.keys())[-1],'order_ordno']
-        condition2=msg.get('trade_id')==openOrder.loc[list(tradeRecord.keys())[-1],'order_id']
-        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'成交單號對比訂單單號：',msg.get('seqno'),openOrder.loc[list(tradeRecord.keys())[-1],'order_seqno'])
-        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'成交單號對比訂單單號：',msg.get('ordno'),openOrder.loc[list(tradeRecord.keys())[-1],'order_ordno'])
-        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'成交單號對比訂單單號：',msg.get('trade_id'),openOrder.loc[list(tradeRecord.keys())[-1],'order_id'])
-        print(datetime.fromtimestamp(int(datetime.now().timestamp())),'條件對比：',condition,condition1,condition2)
-        openOrder.drop(openOrder[condition],axis=0, inplace=True) 
-        openOrder.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openOrder.csv',mode='w',index=1)
-        
-        # tradeRecord 存入csv
-        toCSV(tradeRecord,openTrade)
     return
 
 # 交易回報
