@@ -41,6 +41,7 @@
 tradeRecord要都在place_cb寫，甚至讀取卷商的就好
 
 [未完工]
+測試api.list_trades()/api.update_status(api.futopt_account)
 有部位/有掛單時不下單
 有部位->有掛單->取消掛單或修改掛單或維持
 有成交單->還有掛單->取消掛單或修改掛單或維持、設停損停利、平倉條件、取消相對邊掛單、移動停損、加碼
@@ -557,6 +558,15 @@ def code2symbol(code):
         print('error code')
     return sym
 
+# 列出期貨部位
+def get_positions():
+    global df_positions
+    positions = api.list_positions(api.futopt_account)
+    df_positions = pd.DataFrame(p.__dict__ for p in positions)
+    df_positions.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/positions.csv',index=0)
+
+    return
+
 # 接收tick報價
 @api.quote.on_quote
 def q(topic, quote):
@@ -598,6 +608,10 @@ def q(topic, quote):
     global today
     global beforeYesterday
     global trade
+    global SL
+    global TP
+    global BP
+    global df_positions
     
     conditionBuy=False
     conditionSell=False
@@ -630,6 +644,7 @@ def q(topic, quote):
         # 進場訊號
         signal = st._RSI_SMA(df1)
         
+        
         # 期貨的停損價
         SL=rm.SL(df1,signal)
         
@@ -638,9 +653,7 @@ def q(topic, quote):
         
         #--------------------------
         # 列出期貨部位
-        positions = api.list_positions(api.futopt_account)
-        df_positions = pd.DataFrame(p.__dict__ for p in positions)
-        df_positions.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/positions.csv',index=0)
+        get_positions()
         
         # 查詢帳戶餘額
         # accountBalance = api.account_balance()   
@@ -798,16 +811,24 @@ def q(topic, quote):
         # Buy call訊號處理
         if direction=='BUY':  
             # 是否停損
-            if len(openTrade)!=0:
+            if accountType=='DEMO' and len(openTrade)!=0:
                 ifStopOut=(close<tradeRecord[openTrade[0]]['SL'])
                 if ifStopOut:
                     print(datetime.fromtimestamp(int(datetime.now().timestamp())),tradeRecord[openTrade[0]]['Symbol']+'停損：','價位：',close,'停損價：',tradeRecord[openTrade[0]]['SL'])
             else:
                 ifStopOut=False
+                
+            if accountType=='LIVE' and not df_positions.empty:
+                ifStopOut=(close<tradeRecord.loc[tradeRecord.index[-1],'SL'])
+                if ifStopOut:
+                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),tradeRecord.loc[tradeRecord.index[-1],'Symbol']+'停損：','價位：',close,'停損價：',tradeRecord.loc[tradeRecord.index[-1],'SL'])
+            else:
+                ifStopOut=False
+                
             # if conditionBuy or (close>BP and BP!=0) :  #進場訊號 
             if conditionBuy:  #進場訊號 
                 # if len(openTrade)==0 and openOrder.empty: # 沒有未平倉部位與未成交訂單
-                if len(openTrade)==0: # 沒有未平倉部位與未成交訂單
+                if len(openTrade)==0 and df_positions.empty: # 沒有未平倉部位與未成交訂單
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得合約價格
@@ -838,14 +859,14 @@ def q(topic, quote):
                         # 交易紀錄寫入CSV
                         toCSV(tradeRecord,openTrade)
                     
-                elif len(openTrade)!=0:     #如果未平倉不為零，留作未來加碼用
+                elif len(openTrade)!=0 or not df_positions.empty:     #如果未平倉不為零，留作未來加碼用
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'openTrade!=0')
 
                     pass
             
             
             elif (signal=='SELL' and ifAutoExit) or ifStopOut: 
-                if len(openTrade)!=0:   #有部位
+                if len(openTrade)!=0 or not df_positions.empty:   #有部位
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得目前合約價
@@ -871,17 +892,24 @@ def q(topic, quote):
         # elif direction=='SELL' and openOrder.empty:    #buy put
         elif direction=='SELL':    #buy put
             # 是否停損
-            if len(openTrade)!=0:
+            if accountType=='DEMO' and len(openTrade)!=0:
                 ifStopOut=(close>tradeRecord[openTrade[0]]['SL'])
                 if ifStopOut:
                     print(datetime.fromtimestamp(int(datetime.now().timestamp())),tradeRecord[openTrade[0]]['Symbol']+'停損：','價位：',close,'停損價：',tradeRecord[openTrade[0]]['SL'])
-
             else:
                 ifStopOut=False
+                
+            if accountType=='LIVE' and not df_positions.empty:
+                ifStopOut=(close>tradeRecord.loc[tradeRecord.index[-1],'SL'])
+                if ifStopOut:
+                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),tradeRecord.loc[tradeRecord.index[-1],'Symbol']+'停損：','價位：',close,'停損價：',tradeRecord.loc[tradeRecord.index[-1],'SL'])
+            else:
+                ifStopOut=False
+                
             # if conditionSell or (close<BP and BP!=0):    # 設突破單（未完工） if close>breakOutPrice:
             if conditionSell:    # 設突破單（未完工） if close>breakOutPrice:
                 # if len(openTrade)==0 and openOrder.empty: # 沒有未平倉部位與未成交訂單
-                if len(openTrade)==0: # 沒有未平倉部位與未成交訂單
+                if len(openTrade)==0 and df_positions.empty: # 沒有未平倉部位與未成交訂單
                     contract_txo = selectOption()
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close
@@ -910,12 +938,12 @@ def q(topic, quote):
                         # 交易紀錄寫入CSV
                         toCSV(tradeRecord,openTrade)
                     
-                elif len(openTrade)!=0:
+                elif len(openTrade)!=0 or not df_positions.empty:
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'openTrade!=0')
                     pass
                 
             elif (signal=='BUY' and ifAutoExit) or ifStopOut:
-                if len(openTrade)!=0:
+                if len(openTrade)!=0 or not df_positions.empty:
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol'])
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close
@@ -1052,7 +1080,6 @@ def placeOrder(contract_txo, order):
 # 交易回報
 def place_cb(stat, msg):
     global tradeRecord
-    global openTrade
     global openOrder
     global accountType
     global SL
@@ -1090,19 +1117,15 @@ def place_cb(stat, msg):
             openOrder.loc[openOrder.index[-1],'order_ordno']=msg.get('order').get('ordno')
             openOrder.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openOrder.csv',mode='w',index=1)
              
-            
-        
         # 訂單更改
-        
         
         # 取消訂單
         # if msg['operation'].get('op_type')!='Cancel':
-        if msg.get('operation').get('op_type')!='Cancel':
+        if msg.get('operation').get('op_type')=='Cancel':
             print(datetime.fromtimestamp(int(datetime.now().timestamp())),'訂單取消','買入' if msg['order'].get('action')=='Buy' else '賣出' if msg['order'].get('action')=='Sell' else '無方向','價格:',str(msg['order'].get('price')),'數量：',str(msg['order'].get('quantity')),'代碼：',msg['contract'].get('code')+str(msg['contract'].get('delivery_month'))+str(int(msg['contract'].get('strike_price')))+optionRight)
             
             #顯示msg
             print(msg)
-            
             
             # 發送Telegram
             
@@ -1137,12 +1160,12 @@ def place_cb(stat, msg):
                                                 'SL':SL,
                                                 'TP':0.,
                                                 }
-            
-            # 紀錄未平倉紀錄
-            openTrade.append(list(tradeRecord.keys())[-1])
         
             # 交易紀錄寫入CSV
             toCSV(tradeRecord,openTrade)
+            
+            # 列出期貨部位
+            get_positions()
             
         elif msg['action']=='Sell':
             #顯示msg
@@ -1155,17 +1178,24 @@ def place_cb(stat, msg):
             tradeRecord[list(tradeRecord.keys())[-1]]['Tax']=tradeRecord[list(tradeRecord.keys())[-1]]['Tax']+math.ceil(msg['price']*50*0.001*msg['quantity'])  #紀錄稅
             tradeRecord[list(tradeRecord.keys())[-1]]['Realized PNL']=round(50*(msg['price']-tradeRecord[list(tradeRecord.keys())[-1]]['Entry Price']),0) #紀錄實現利潤
             tradeRecord[list(tradeRecord.keys())[-1]]['Unrealized PNL']=round(0.0,0) #未平倉損益歸零
-            
-            #清空未平倉紀錄
-            openTrade=[]    
+  
             
             # 交易紀錄寫入CSV
             toCSV(tradeRecord,openTrade)
+            
+            # 列出期貨部位
+            get_positions()
        
     return
 
 # 交易回報
 api.set_order_callback(place_cb)
+
+# 列出期貨部位
+get_positions()
+
+
+
 
 @api.quote.on_event
 def event_callback(resp_code: int, event_code: int, info: str, event: str):
