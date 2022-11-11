@@ -560,7 +560,7 @@ def code2symbol(code):
 
 # 列出期貨部位
 def get_positions():
-    global df_positions
+    global df_positions     
     positions = api.list_positions(api.futopt_account)
     df_positions = pd.DataFrame(p.__dict__ for p in positions)
     df_positions.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/positions.csv',index=0)
@@ -642,11 +642,13 @@ def q(topic, quote):
         # print(unixtime/(timeFrame2*60),unixtime//(timeFrame2*60),datetime.now().timestamp(),unixtime,ts)
 
         # 進場訊號
-        signal = st._RSI_SMA(df1)
+        signalEntry = st._RSI_SMA(df1)
         
+        # 出場訊號
+        signalExit = st._RSI(df1)
         
         # 期貨的停損價
-        SL=rm.SL(df1,signal)
+        SL=rm.SL(df1,signalEntry)
         
         # 期貨的突破價
         BP=st._BP(df1,direction)
@@ -654,20 +656,24 @@ def q(topic, quote):
         #--------------------------
         # 列出期貨部位
         get_positions()
+        if not df_positions.empty:
+            tradeRecord[list(tradeRecord.keys())[-1]]['Unrealized PNL']
         
         # 查詢帳戶餘額
         # accountBalance = api.account_balance()   
         # df_accountBalance = pd.DataFrame(accountBalance)  
         # df_accountBalance.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/accountBalance.csv',index=0)
            
-        #-------------------------
-        
+           
         # 列出平倉
-        settlement = api.settlements(api.futopt_account)
-        df_settlement=pd.DataFrame(s.__dict__ for s in settlement).set_index("T")  
-        df_settlement.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/settlement.csv',index=0)
+        # settlement = api.settlements(api.futopt_account)
+        # df_settlement=pd.DataFrame(s.__dict__ for s in settlement).set_index("T")  
+        # df_settlement.to_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/settlement.csv',index=0)
 
         
+        #-------------------------
+        
+    
         # 列出簡要損益
         # profitloss_sum = api.list_profit_loss_sum(api.futopt_account,beforeYesterday,today)
         # df_profitloss_sum = pd.DataFrame(data.__dict__ for data in profitloss_sum.profitloss_summary) 
@@ -792,16 +798,16 @@ def q(topic, quote):
         
         # 判斷買進條件
         if ifTF2 and ifTF3:
-            conditionBuy=signal =='BUY' and direction2!='SELL' and direction3!='SELL'
-            conditionSell=signal =='SELL' and direction2!='BUY' and direction3!='BUY'
+            conditionBuy=signalEntry =='BUY' and direction2!='SELL' and direction3!='SELL'
+            conditionSell=signalEntry =='SELL' and direction2!='BUY' and direction3!='BUY'
         elif ifTF2:
-            conditionBuy=signal =='BUY' and direction2!='SELL' 
-            conditionSell=signal =='SELL' and direction2!='BUY'
-            # print('conditionBuy:',conditionBuy,'signal==BUY',signal =='BUY','direction2!=SELL:',direction2!='SELL')
-            # print('conditionSell:',conditionSell,'signal==SELL',signal =='SELL','direction2!=BUY:',direction2!='BUY')
+            conditionBuy=signalEntry =='BUY' and direction2!='SELL' 
+            conditionSell=signalEntry =='SELL' and direction2!='BUY'
+            # print('conditionBuy:',conditionBuy,'signalEntry==BUY',signalEntry =='BUY','direction2!=SELL:',direction2!='SELL')
+            # print('conditionSell:',conditionSell,'signalEntry==SELL',signalEntry =='SELL','direction2!=BUY:',direction2!='BUY')
         else:
-            conditionBuy=signal =='BUY'
-            conditionSell=signal =='SELL'
+            conditionBuy=signalEntry =='BUY'
+            conditionSell=signalEntry =='SELL'
             
         #依照設定更改動作
         readOrder()
@@ -819,9 +825,9 @@ def q(topic, quote):
                 ifStopOut=False
                 
             if accountType=='LIVE' and not df_positions.empty:
-                ifStopOut=(close<tradeRecord.loc[tradeRecord.index[-1],'SL'])
+                ifStopOut=(close<tradeRecord[list(tradeRecord.keys())[-1]]['SL'])
                 if ifStopOut:
-                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),tradeRecord.loc[tradeRecord.index[-1],'Symbol']+'停損：','價位：',close,'停損價：',tradeRecord.loc[tradeRecord.index[-1],'SL'])
+                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),close<tradeRecord[list(tradeRecord.keys())[-1]]['Symbol']+'停損：','價位：',close,'停損價：',close<tradeRecord[list(tradeRecord.keys())[-1]]['SL'])
             else:
                 ifStopOut=False
                 
@@ -832,7 +838,7 @@ def q(topic, quote):
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得合約價格
-                    # order = selectOrder(signal,qty) #設定訂單
+                    # order = selectOrder(signalEntry,qty) #設定訂單
                     order = selectOrder('BUY',qty) #設定訂單
                     placeOrder(contract_txo, order) #下單
                     
@@ -865,13 +871,21 @@ def q(topic, quote):
                     pass
             
             
-            elif (signal=='SELL' and ifAutoExit) or ifStopOut: 
-                if len(openTrade)!=0 or not df_positions.empty:   #有部位
-                    contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
+            elif (signalExit=='SELL' and ifAutoExit) or ifStopOut: 
+                if len(openTrade)!=0 or not df_positions.empty:  #模擬單或實單有部位
+                    
+                    if len(openTrade)!=0:
+                        contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
+                    elif not df_positions.empty:
+                        contract_txo = symbol2Contract(tradeRecord[list(tradeRecord.keys())[-1]]['Symbol']) #讀取部位合約
+                        
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得目前合約價
-                    # order = selectOrder(signal,tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
-                    order = selectOrder('SELL',tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
+                    
+                    if len(openTrade)!=0:
+                        order = selectOrder('SELL',tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
+                    elif not df_positions.empty:
+                        order = selectOrder('SELL',tradeRecord[list(tradeRecord.keys())[-1]]['Quantity'])   #設定平倉訂單
                     placeOrder(contract_txo, order) #下單
                     
                     # 判別模擬單或實單做交易紀錄
@@ -900,9 +914,9 @@ def q(topic, quote):
                 ifStopOut=False
                 
             if accountType=='LIVE' and not df_positions.empty:
-                ifStopOut=(close>tradeRecord.loc[tradeRecord.index[-1],'SL'])
+                ifStopOut=(close>close<tradeRecord[list(tradeRecord.keys())[-1]]['SL'])
                 if ifStopOut:
-                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),tradeRecord.loc[tradeRecord.index[-1],'Symbol']+'停損：','價位：',close,'停損價：',tradeRecord.loc[tradeRecord.index[-1],'SL'])
+                    print(datetime.fromtimestamp(int(datetime.now().timestamp())),close<tradeRecord[list(tradeRecord.keys())[-1]]['Symbol']+'停損：','價位：',close,'停損價：',close<tradeRecord[list(tradeRecord.keys())[-1]]['SL'])
             else:
                 ifStopOut=False
                 
@@ -942,12 +956,18 @@ def q(topic, quote):
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'openTrade!=0')
                     pass
                 
-            elif (signal=='BUY' and ifAutoExit) or ifStopOut:
+            elif (signalExit=='BUY' and ifAutoExit) or ifStopOut:
                 if len(openTrade)!=0 or not df_positions.empty:
-                    contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol'])
+                    if len(openTrade)!=0:
+                        contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
+                    elif not df_positions.empty:
+                        contract_txo = symbol2Contract(tradeRecord[list(tradeRecord.keys())[-1]]['Symbol']) #讀取部位合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close
-                    order = selectOrder('SELL',tradeRecord[openTrade[0]]['Quantity'])
+                    if len(openTrade)!=0:
+                        order = selectOrder('SELL',tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
+                    elif not df_positions.empty:
+                        order = selectOrder('SELL',tradeRecord[list(tradeRecord.keys())[-1]]['Quantity'])   #設定平倉訂單
                     placeOrder(contract_txo, order)
                     
                     # 判別模擬單或實單做交易紀錄
@@ -1082,6 +1102,7 @@ def place_cb(stat, msg):
     global tradeRecord
     global openOrder
     global accountType
+    global df_positions
     global SL
     global TP
     # global direction
@@ -1166,6 +1187,10 @@ def place_cb(stat, msg):
             
             # 列出期貨部位
             get_positions()
+            if not df_positions.empty:
+                tradeRecord[list(tradeRecord.keys())[-1]]['Unrealized PNL']
+            
+            # 按照3個id消除openOrder
             
         elif msg['action']=='Sell':
             #顯示msg
@@ -1185,6 +1210,8 @@ def place_cb(stat, msg):
             
             # 列出期貨部位
             get_positions()
+            
+            # 按照3個id消除openOrder
        
     return
 
@@ -1193,9 +1220,8 @@ api.set_order_callback(place_cb)
 
 # 列出期貨部位
 get_positions()
-
-
-
+if not df_positions.empty:
+    tradeRecord[list(tradeRecord.keys())[-1]]['Unrealized PNL']
 
 @api.quote.on_event
 def event_callback(resp_code: int, event_code: int, info: str, event: str):
