@@ -905,29 +905,27 @@ def q(topic, quote):
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得目前合約價
                     order = selectOrder('SELL',tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
-                elif not df_positions.empty:
-                    # contract_txo = symbol2Contract(tradeRecord[list(tradeRecord.keys())[-1]]['Symbol']) #讀取部位合約
-                    contract_txo = symbol2Contract(code2symbol(df_positions.loc[df_positions.index[-1],'code'])) #讀取部位合約
-                    snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
-                    closePrice = snapshots[0].close #取得目前合約價
-                    order = selectOrder('SELL',df_positions.loc[df_positions.index[-1],'quantity'])   #設定平倉訂單
-                placeOrder(contract_txo, order) #下單
-                
-                # 判別模擬單或實單做交易紀錄
-                if accountType=='DEMO':
+                    # 更新交易紀錄
                     tradeRecord[openTrade[0]]['Exit Price']=closePrice  #紀錄出場價格
                     tradeRecord[openTrade[0]]['Exit DateTime']=datetime.fromtimestamp(int(datetime.now().timestamp()))  #紀錄出場時間
                     tradeRecord[openTrade[0]]['Commision']=tradeRecord[openTrade[0]]['Commision']+18*tradeRecord[openTrade[0]]['Quantity']  #紀錄手續費
                     tradeRecord[openTrade[0]]['Tax']=tradeRecord[openTrade[0]]['Tax']+math.ceil(closePrice*50*0.001*tradeRecord[openTrade[0]]['Quantity'])  #紀錄稅
                     tradeRecord[openTrade[0]]['Realized PNL']=round(50*(tradeRecord[openTrade[0]]['Exit Price']-tradeRecord[openTrade[0]]['Entry Price']),0) #紀錄實現利潤
                     tradeRecord[openTrade[0]]['Unrealized PNL']=round(0.0,0) #未平倉損益歸零
-
-                    #清空未平倉紀錄
-                    openTrade=[]    
-                    
                     # 交易紀錄寫入CSV
                     toCSV(tradeRecord,openTrade)
-        
+                    #清空未平倉紀錄
+                    openTrade=[]  
+                elif not df_positions.empty:
+                    # contract_txo = symbol2Contract(tradeRecord[list(tradeRecord.keys())[-1]]['Symbol']) #讀取部位合約
+                    print(df_positions.loc[df_positions.index[-1],'code'])
+                    print(code2symbol(df_positions.loc[df_positions.index[-1],'code']))
+                    contract_txo = symbol2Contract(code2symbol(df_positions.loc[df_positions.index[-1],'code'])) #讀取部位合約
+                    snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
+                    closePrice = snapshots[0].close #取得目前合約價
+                    order = selectOrder('SELL',df_positions.loc[df_positions.index[-1],'quantity'])   #設定平倉訂單
+                placeOrder(contract_txo, order) #下單
+                
         # elif direction=='SELL' and openOrder.empty:    #buy put
         elif direction=='SELL':    #buy put
             # 是否停損
@@ -992,29 +990,24 @@ def q(topic, quote):
                         snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                         closePrice = snapshots[0].close
                         order = selectOrder('SELL',tradeRecord[openTrade[0]]['Quantity'])   #設定平倉訂單
-                    elif not df_positions.empty:
-                        contract_txo = symbol2Contract(code2symbol(df_positions.loc[df_positions.index[-1],'code'])) #讀取部位合約
-                        snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
-                        closePrice = snapshots[0].close
-                        order = selectOrder('SELL',df_positions.loc[df_positions.index[-1],'quantity'])   #設定平倉訂單
-                    placeOrder(contract_txo, order)
-                    
-                    # 判別模擬單或實單做交易紀錄
-                    if accountType=='DEMO':
+                        # 更新交易紀錄
                         tradeRecord[openTrade[0]]['Exit Price']=closePrice
                         tradeRecord[openTrade[0]]['Exit DateTime']=datetime.fromtimestamp(int(datetime.now().timestamp()))  #紀錄出場時間
                         tradeRecord[openTrade[0]]['Commision']=tradeRecord[openTrade[0]]['Commision']+18*tradeRecord[openTrade[0]]['Quantity']
                         tradeRecord[openTrade[0]]['Tax']=tradeRecord[openTrade[0]]['Tax']+math.ceil(closePrice*50*0.001*tradeRecord[openTrade[0]]['Quantity'])
                         tradeRecord[openTrade[0]]['Realized PNL']=round(50*(tradeRecord[openTrade[0]]['Exit Price']-tradeRecord[openTrade[0]]['Entry Price']),0)
                         tradeRecord[openTrade[0]]['Unrealized PNL']=round(0.0,0) #未平倉損益歸零
-                        
+                        # 交易紀錄寫入CSV
+                        toCSV(tradeRecord,openTrade)
                         #清空未平倉紀錄
                         openTrade=[]    
                         
-                        # 交易紀錄寫入CSV
-                        toCSV(tradeRecord,openTrade)   
-                        # tradeRecord={}    
-                        
+                    elif not df_positions.empty:
+                        contract_txo = symbol2Contract(code2symbol(df_positions.loc[df_positions.index[-1],'code'])) #讀取部位合約
+                        snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
+                        closePrice = snapshots[0].close
+                        order = selectOrder('SELL',df_positions.loc[df_positions.index[-1],'quantity'])   #設定平倉訂單
+                    placeOrder(contract_txo, order)     
         
 # 重組ticks轉換5分K
 def resampleBar(period,data1):
@@ -1115,7 +1108,7 @@ def placeOrder(contract_txo, order):
             '''
             
             # 發送telegram
-            sendTelegram(accountType+' Account '+ order.action.upper()+' '+optionDict[str(contract_txo.option_right)]+' '+contract_txo.symbol+'@'+str(closePrice), token, chatid)
+            sendTelegram(accountType+' Account '+ order.action.upper()+' '+optionDict[str(contract_txo.option_right)].upper()+' '+contract_txo.symbol+'@'+str(closePrice), token, chatid)
             placedOrder += 1
             api.list_trades()
             api.update_status(api.futopt_account)
@@ -1241,7 +1234,7 @@ def place_cb(stat, msg):
                             'SL':0,
                             'TP':0.,
                             }
-            elif len(tradeRecord)==0:
+            elif len(tradeRecord)!=0:
                 # 更新交易紀錄：tradeRecord
                 tradeRecord[list(tradeRecord.keys())[-1]]['Exit Price']=msg['price']
                 tradeRecord[list(tradeRecord.keys())[-1]]['Exit DateTime']=datetime.fromtimestamp(int(msg['ts']))
