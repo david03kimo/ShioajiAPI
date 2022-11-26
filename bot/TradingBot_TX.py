@@ -31,19 +31,19 @@
 前一天假日沒資料：檢測前一天日期是否存在，如果沒有就一直到有日期的那天抓資料。
 即時大週期K線指標
 停損:半價/用期貨的前高前低
+tradeRecord要都在place_cb寫，甚至讀取卷商的就好
 
 
 [問題]
 浮動損益沒法顯現在tradeRecord的Unrealized PNL
+停損單出場要另外寫，使用範圍市價
 沒下單
 資料沒有繼續進來
 觸價突破單:邏輯不完整
-停損單出場要另外寫，使用範圍市價
-tradeRecord要都在place_cb寫，甚至讀取卷商的就好
 FutureWarning: Inferring datetime64[ns] from data containing strings is deprecated and will be removed in a future version. To retain the old behavior explicitly pass Series(data, dtype=datetime64[ns])
 
 [未完工]
-加入Unrealized PNL
+Live account的成交回報telegram
 增加可讀性：把Def func前移，主程式集中放後面
 處理OrderState，Live從API回報了解庫存，未成交單子處理:openOrder,closedOrder,openPosition,openOrder,closedOrder,closedPosition
 測試api.list_trades()/api.update_status(api.futopt_account)
@@ -861,7 +861,7 @@ def q(topic, quote):
             # if conditionBuy or (close>BP and BP!=0) :  #進場訊號 
             if conditionBuy:  #進場訊號 
                 # if len(openTrade)==0 and openOrder.empty: # 沒有未平倉部位與未成交訂單
-                if len(openTrade)==0 and df_positions.empty: # 沒有未平倉部位與未成交訂單
+                if len(openTrade)==0 and df_positions.empty and placedOrder < orderCount: # 沒有未平倉部位與未成交訂單
                     contract_txo = selectOption()   #選擇選擇權合約
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得合約價格
@@ -924,6 +924,7 @@ def q(topic, quote):
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close #取得目前合約價
                     order = selectOrder('SELL',df_positions.loc[df_positions.index[-1],'quantity'])   #設定平倉訂單
+                placedOrder += 1
                 placeOrder(contract_txo, order) #下單
                 
         # elif direction=='SELL' and openOrder.empty:    #buy put
@@ -950,7 +951,7 @@ def q(topic, quote):
             # if conditionSell or (close<BP and BP!=0):    # 設突破單（未完工） if close>breakOutPrice:
             if conditionSell:    # 設突破單（未完工） if close>breakOutPrice:
                 # if len(openTrade)==0 and openOrder.empty: # 沒有未平倉部位與未成交訂單
-                if len(openTrade)==0 and df_positions.empty: # 沒有未平倉部位與未成交訂單
+                if len(openTrade)==0 and df_positions.empty and placedOrder < orderCount: # 沒有未平倉部位與未成交訂單
                     contract_txo = selectOption()
                     snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                     closePrice = snapshots[0].close
@@ -1001,12 +1002,12 @@ def q(topic, quote):
                         toCSV(tradeRecord,openTrade)
                         #清空未平倉紀錄
                         openTrade=[]    
-                        
                     elif not df_positions.empty:
                         contract_txo = symbol2Contract(code2symbol(df_positions.loc[df_positions.index[-1],'code'])) #讀取部位合約
                         snapshots = api.snapshots([contract_txo])  # 取得合約的snapshots
                         closePrice = snapshots[0].close
                         order = selectOrder('SELL',df_positions.loc[df_positions.index[-1],'quantity'])   #設定平倉訂單
+                    placedOrder += 1
                     placeOrder(contract_txo, order)     
         
 # 重組ticks轉換5分K
@@ -1077,47 +1078,42 @@ def selectOrder(action,quantity):
 # 發送訂單
 def placeOrder(contract_txo, order):
     global accountType
-    global placedOrder
     global optionDict
-    global orderCount
     global trade
     
     if accountType == 'LIVE':   #實盤時
-        if placedOrder <= orderCount:   #在未達限定操作次數時
-            # 下單
-            trade = api.place_order(contract_txo, order)
-            # 顯示訊息
-            print(datetime.fromtimestamp(int(datetime.now().timestamp())), accountType,'Account',  order.action.upper(),optionDict[str(contract_txo.option_right)],contract_txo.symbol,'@',str(closePrice))
-            
-            print('=======trade======')
-            print(trade)
-            
-            
-            '''
-            if trade.status.status=='Submitted':
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Submitted:傳送成功')
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.status.status)
-            if trade=='Cancelled':
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Cancelled:已刪除')
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade)
-            if trade=='Filled':
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Filled:完全成交')
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.contract)
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.order)
-                print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.status)
-            '''
-            
-            # 發送telegram
-            sendTelegram(accountType+' Account '+ order.action.upper()+' '+optionDict[str(contract_txo.option_right)].upper()+' '+contract_txo.symbol+'@'+str(closePrice), token, chatid)
-            placedOrder += 1
-            api.list_trades()
-            api.update_status(api.futopt_account)
+        # 下單
+        trade = api.place_order(contract_txo, order)
+        # 顯示訊息
+        print(datetime.fromtimestamp(int(datetime.now().timestamp())), accountType,'Account',  order.action.upper(),optionDict[str(contract_txo.option_right)],contract_txo.symbol,'@',str(closePrice))
+        
+        print('=======trade======')
+        print(trade)
+        
+        
+        '''
+        if trade.status.status=='Submitted':
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Submitted:傳送成功')
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.status.status)
+        if trade=='Cancelled':
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Cancelled:已刪除')
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade)
+        if trade=='Filled':
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),'Filled:完全成交')
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.contract)
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.order)
+            print(datetime.fromtimestamp(int(datetime.now().timestamp())),trade.status)
+        '''
+        
+        # 發送telegram
+        sendTelegram(accountType+' Account '+ order.action.upper()+' '+optionDict[str(contract_txo.option_right)].upper()+' '+contract_txo.symbol+'@'+str(closePrice), token, chatid)
+        api.list_trades()
+        api.update_status(api.futopt_account)
     elif accountType == 'DEMO': #模擬操作時
         # 顯示訊息
         print(datetime.fromtimestamp(int(datetime.now().timestamp())), accountType,'Account', order.action.upper(),optionDict[str(contract_txo.option_right)].upper(),contract_txo.symbol,'@',str(closePrice))
         # 發送telegram
         sendTelegram(accountType+' Account '+  order.action.upper()+' '+optionDict[str(contract_txo.option_right)].upper()+' '+contract_txo.symbol+'@'+str(closePrice), token, chatid)
-
     return
 
 # 交易回報
@@ -1183,6 +1179,7 @@ def place_cb(stat, msg):
         optionRight='C' if str(msg['option_right'])=='OptionCall' else 'P'
         print(datetime.fromtimestamp(int(datetime.now().timestamp())),'訂單成交:','買入' if msg['action']=='Buy' else '賣出' if msg['action']=='Sell' else '','價格',msg['price'],'數量',msg['quantity'],'代碼：',msg['code']+msg['delivery_month']+str(int(msg['strike_price']))+optionRight)
         
+        # 發送Telegram成交訊息
         
         if msg['action']=='Buy':
             #顯示msg
