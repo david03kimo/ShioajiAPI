@@ -1,77 +1,3 @@
-'''
-[已完工]
-從config.cfg讀取帳戶密碼
-讀取歷史K線加上自組K線
-自組K線與歷史K線的比較
-市場收盤時要收K線
-運用telegram通知自己已下單訊息與目前設定
-修正指標慢了一根K線
-獨立使用_RSI策略集
-自動選擇周選合約，用TX[tx]的方式，把所有snapshot讀入，只留一定價格以下的，然後排序取最小的。8/31 W6? 9W1，修正錯誤
-先訂閱ticks在讀入kbar，然後kbar完成後再接上去
-休市期間不要重組K線
-訂單訊息檔readOrder
-周選下範圍市價單與限價單
-函式化
-自動交易
-報表，使用trade dict:reference IB API new design
-上github與別人交流
-交易紀錄存在CSV可以延續不因程式中斷而重新計算
-加上60分鐘線telegram提醒
-沒有小時訊號
-刪除df0節省記憶體
-週一一早第一根K線有問題
-增加大週期：三週期
-修正大盤為期指作為履約標的
-長週期指標變了telegram提醒
-增加是否自動出場開關
-增加選擇幾個週期濾網
-開盤第一根K線怪怪的，似乎把盤前搓合的合併了。比對歷史K線看看:2022-10-12 08:45:00 Market:Opened 3K Bar:2022-10-12 08:42
-收盤沒有收K線
-前一天假日沒資料：檢測前一天日期是否存在，如果沒有就一直到有日期的那天抓資料。
-即時大週期K線指標
-停損:半價/用期貨的前高前低
-tradeRecord要都在place_cb寫，甚至讀取卷商的就好
-
-
-[問題]
-浮動損益沒法顯現在tradeRecord的Unrealized PNL
-停損單出場要另外寫，使用範圍市價
-沒下單
-資料沒有繼續進來
-觸價突破單:邏輯不完整
-FutureWarning: Inferring datetime64[ns] from data containing strings is deprecated and will be removed in a future version. To retain the old behavior explicitly pass Series(data, dtype=datetime64[ns])
-
-[未完工]
-Live account的成交回報telegram
-增加可讀性：把Def func前移，主程式集中放後面
-處理OrderState，Live從API回報了解庫存，未成交單子處理:openOrder,closedOrder,openPosition,openOrder,closedOrder,closedPosition
-測試api.list_trades()/api.update_status(api.futopt_account)
-有部位/有掛單時不下單
-有部位->有掛單->取消掛單或修改掛單或維持
-有成交單->還有掛單->取消掛單或修改掛單或維持、設停損停利、平倉條件、取消相對邊掛單、移動停損、加碼
-
-尾隨停損
-增加alert。切換DEMO,LIVE,ALERT
-在call-back函數之外再建立執行緒來計算
-
-彙整修正同向的提醒
-加碼
-參考大大的程式
-三重濾網
-績效統計：勝率、賠率、破產率、平均獲利、平均損失、95%都在多少損失內
-接上callback 函數作為回測
-即時回測
-選擇權的報價
-tradingview來啟動 to IB&SinoPac API.
-周選合約裡面找划算的
-交易股票期貨、選擇權
-交易ETF
-
-Snapshot to DataFrame¶
-
-
-'''
 from asyncore import loop
 import sys
 import os
@@ -124,6 +50,16 @@ def Tradingsettings():
     global ifAutoExitPre
     global ifCloseBar
     global ifCloseBarPre
+    global ifExitInstance
+    global ifExitInstancePre
+    global direction
+    global directionPre
+    global accountType
+    global accountTypePre
+    global qty
+    global qtyPre
+    global orderCount
+    global orderCountPre
     
     config = configparser.ConfigParser()
     config.read('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Settings/TradeSettings.cfg')  # 讀入交易設定
@@ -147,6 +83,17 @@ def Tradingsettings():
     # ifTF3 = bool(config.get('Trade', 'ifTF3'))   # 讀入交易設定：選擇權在多少錢以下
     ifAutoExit = eval(config.get('Trade', 'ifAutoExit'))   # 讀入交易設定：選擇權在多少錢以下
     ifCloseBar = eval(config.get('Trade', 'ifCloseBar'))   # 讀入交易設定：選擇權在多少錢以下
+    ifExitInstance = eval(config.get('Trade', 'ifExitInstance'))   # 讀入交易設定：選擇權在多少錢以下
+    orderCount = int(config.get('Trade', 'orderCount')) 
+    direction = config.get('Trade', 'direction')
+    qty = int(config.get('Trade', 'qty')) 
+    
+    if qty == 0:
+        accountType = 'DEMO'    #模擬操作
+        qty = 1
+    else:
+        accountType = 'LIVE'    #實盤操作
+    
     
     ifTF2=True if timeFrame2.isdigit() else False
     ifTF3=True if timeFrame3.isdigit() else False
@@ -160,6 +107,12 @@ def Tradingsettings():
     nDollarPre=nDollar
     ifAutoExitPre=ifAutoExit
     ifCloseBarPre=ifCloseBar
+    ifExitInstancePre=ifExitInstance
+    accountTypePre=accountType
+    directionPre=direction
+    qtyPre=qty
+    orderCountPre=orderCount
+    
     return
 
 # 讀取config
@@ -189,7 +142,10 @@ st = Strategies(StrategyType)   # 策略函式
 rm = RiskManage(StrategyType, 2)    # 風控函式
 
 # 2022年休市日期
-holidays_list=['1/1','1/26','1/31','2/1','2/2','2/3','2/4','2/7','2/28','4/4','4/5','5/1','5/2','6/3','9/9','9/10','10/10']
+holidays_list_2022=['1/1','1/26','1/31','2/1','2/2','2/3','2/4','2/7','2/28','4/4','4/5','5/1','5/2','6/3','9/9','9/10','10/10']
+
+# 2023年休市日期
+holidays_list=['1/2','1/17','1/18','1/19','1/20','1/21','1/22','1/23','1/24','1/25','1/26','1/27','2/27','2/28','4/3','4/4','4/5','5/1','6/22','6/23','9/29','10/9','10/10']
 
 # K線重組字典
 resDict = {
@@ -217,40 +173,39 @@ def readTelegram():
 readTelegram()
 
 # 訂單設定
-def readOrder():
-    global direction
-    global accountType
-    global qty
-    global directionPre
-    global accountTypePre
-    global qtyPre
-    global orderCount
-    # 讀入訂單設定檔
-    df_order = pd.read_csv(
-        '//Users/apple/Documents/code/PythonX86/ShioajiAPI/Settings/order.csv',index_col=False)
-    df_order = df_order.values.tolist()
-    a = df_order[0][0].split()
-    orderCount=int(a[0])    #下單的次數限制
+# def readOrder():
+#     global direction
+#     global accountType
+#     global qty
+#     global directionPre
+#     global accountTypePre
+#     global qtyPre
+#     global orderCount
+#     # 讀入訂單設定檔
+#     df_order = pd.read_csv(
+#         '//Users/apple/Documents/code/PythonX86/ShioajiAPI/Settings/order.csv',index_col=False)
+#     df_order = df_order.values.tolist()
+#     a = df_order[0][0].split()
+#     orderCount=int(a[0])    #下單的次數限制
     
-    direction = a[1].upper()    #操作的方向：多、空
-    if direction not in ['BUY', 'SELL','WAIT','AUTO']:
-        print('Wrong Action!!!')
-        c = input('___________________')
+#     direction = a[1].upper()    #操作的方向：多、空
+#     if direction not in ['BUY', 'SELL','WAIT','AUTO']:
+#         print('Wrong Action!!!')
+#         c = input('___________________')
 
-    qty = int(a[2]) #下單的數量
-    if qty == 0:
-        accountType = 'DEMO'    #模擬操作
-        qty = 1
-    else:
-        accountType = 'LIVE'    #實盤操作
+#     qty = int(a[2]) #下單的數量
+#     if qty == 0:
+#         accountType = 'DEMO'    #模擬操作
+#         qty = 1
+#     else:
+#         accountType = 'LIVE'    #實盤操作
         
-    # 記錄原值做比較是否改變，有則提醒
-    accountTypePre=accountType
-    directionPre=direction
-    qtyPre=qty
+#     # 記錄原值做比較是否改變，有則提醒
+#     accountTypePre=accountType
+#     directionPre=direction
+#     qtyPre=qty
     
-
-    return
+#     return
 
 
 # 發送訊息到Telegram函式
@@ -282,6 +237,16 @@ def settingChange():
     global ifAutoExitPre
     global ifCloseBar
     global ifCloseBarPre
+    global ifExitInstance
+    global ifExitInstancePre
+    global direction
+    global directionPre
+    global accountType
+    global accountTypePre
+    global qty
+    global qtyPre
+    global orderCount
+    global orderCountPre
     
     if (qtyPre!=qty) or (directionPre!=direction) or (accountTypePre!=accountType):
         print('Setting:',accountType,'account',direction,qty)
@@ -311,6 +276,31 @@ def settingChange():
         print('If act at HTF Bar closed',ifCloseBar)
         sendTelegram('If act at HTF Bar closed '+str(ifCloseBar), token, chatid)  
         ifCloseBarPre=ifCloseBar
+    
+    if (ifExitInstance!=ifExitInstancePre):
+        print('If exit instance',ifExitInstance)
+        sendTelegram('If exit instance '+str(ifExitInstance), token, chatid)  
+        ifExitInstancePre=ifExitInstance
+        
+    if (direction!=directionPre):
+        print('direction change to',direction)
+        sendTelegram('direction change to '+str(direction), token, chatid)  
+        directionPre=direction
+        
+    if (accountType!=accountTypePre):
+        print('account type change to ',accountType)
+        sendTelegram('account type change to '+str(direction), token, chatid)  
+        accountTypePre=accountType
+    
+    if (qty!=qtyPre):
+        print('qty change to ',qty)
+        sendTelegram('qty change to '+str(qty), token, chatid)  
+        qtyPre=qty
+        
+    if (orderCount!=orderCountPre):
+        print('order count change to ',orderCount)
+        sendTelegram('order count change to '+str(orderCount), token, chatid)  
+        orderCountPre=orderCount
         
     return
 
@@ -323,6 +313,9 @@ def selectFutures():
     
     if datetime.now().day>=day:     #計算下個月結算日
         month=month+1
+        if month>12:
+            month-=12
+            year+=1
         day=21-(dt.date(year,month,1).weekday()+4)%7 
    
     futureSymbol='TXF'+str(year)+str(month).zfill(2) #zfill(2)保持月份是兩位數
@@ -336,17 +329,7 @@ def fromCSV():
     dict_tradeRecord={}
     list_openTrade=[]
     
-    if not os.path.isfile('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/tradeRecord.csv'):
-        # print({},[])
-        return {},[]
-    elif os.path.isfile('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/tradeRecord.csv') and not os.path.isfile('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openTrade.csv'):
-        df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/tradeRecord.csv',index_col=0)
-        for index in df_tradeRecord.index:
-            dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
-            # dict_tradeRecord.drop(index=dict_tradeRecord[dict_tradeRecord['Exit Price']==0].index,axis = 0,inplace = True)
-        # print(dict_tradeRecord,[])
-        return dict_tradeRecord,[]
-    elif os.path.isfile('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/tradeRecord.csv') and os.path.isfile('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openTrade.csv'):
+    if os.path.isfile('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/tradeRecord.csv') and os.path.isfile('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openTrade.csv'):
         df_tradeRecord=pd.read_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/tradeRecord.csv',index_col=0)
         for index in df_tradeRecord.index:
             dict_tradeRecord[df_tradeRecord.loc[index,'DateTime']]=df_tradeRecord.loc[index].to_dict()
@@ -356,10 +339,12 @@ def fromCSV():
             # df_openTrade=pd.read_csv('/Users/apple/Documents/code/PythonX86/ShioajiAPI/Output/openTrade.csv',index=0)
         except:
             # print(dict_tradeRecord,[])
-            return dict_tradeRecord,[]
+            return {},[]
         list_openTrade=df_openTrade.loc[0].to_list()
         # print(dict_tradeRecord,list_openTrade)
         return dict_tradeRecord,list_openTrade
+    else:
+        return {},[]
     
 # 檢查是否為休市期間
 def ifOffMarket():
@@ -383,7 +368,8 @@ placedOrder = 0  # 一開始下單次數為零
 ifStopOut=False # 判斷是否停損初始值
  
 #依照設定來動作
-readOrder()
+# readOrder()
+Tradingsettings()
 settingChange()
 
 # 模擬賬戶紀錄
@@ -617,6 +603,8 @@ def q(topic, quote):
     global ifAutoExitPre
     global ifCloseBar
     global ifCloseBarPre
+    global ifExitInstance
+    global ifExitInstancePre
     global ifStopOut
     global today
     global beforeYesterday
@@ -625,6 +613,7 @@ def q(topic, quote):
     global TP
     global BP
     global df_positions
+    global placedOrder
     
     conditionBuy=False
     conditionSell=False
@@ -666,7 +655,7 @@ def q(topic, quote):
         # print(unixtime/(timeFrame2*60),unixtime//(timeFrame2*60),datetime.now().timestamp(),unixtime,ts)
 
         # 進場訊號
-        signalEntry = st._RSI_SMA(df1)
+        signalEntry = st._RSI(df1)
         # signalEntry = st._RSI(df1)
         
         # 出場訊號
@@ -832,7 +821,7 @@ def q(topic, quote):
             conditionSell=signalEntry =='SELL'
             
         #依照設定更改動作
-        readOrder()
+        # readOrder()
         Tradingsettings()
         settingChange()
         
@@ -898,7 +887,7 @@ def q(topic, quote):
                     pass
             
             
-            elif (signalExit=='SELL' and ifAutoExit) or ifStopOut: 
+            elif (signalExit=='SELL' and ifAutoExit) or ifStopOut or ifExitInstance: 
                 # 檢查模擬單或實單有部位
                 if len(openTrade)!=0:
                     contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
@@ -984,7 +973,7 @@ def q(topic, quote):
                     # print(datetime.fromtimestamp(int(datetime.now().timestamp())),'openTrade!=0')
                     pass
                 
-            elif (signalExit=='BUY' and ifAutoExit) or ifStopOut:
+            elif (signalExit=='BUY' and ifAutoExit) or ifStopOut or ifExitInstance:
                 if len(openTrade)!=0 or not df_positions.empty:
                     if len(openTrade)!=0:
                         contract_txo = symbol2Contract(tradeRecord[openTrade[0]]['Symbol']) #讀取部位合約
